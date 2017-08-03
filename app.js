@@ -18,7 +18,7 @@ var webhooks = require('./app/routes/webhooks');
 var app = express();
 
 // MongoDB database
-mongoose.connect('mongodb://localhost/ForgetMeTest');
+// mongoose.connect('mongodb://localhost/ForgetMeTest');
 
 // view engine setup
 app.set('views', path.join(__dirname, 'app', 'views'));
