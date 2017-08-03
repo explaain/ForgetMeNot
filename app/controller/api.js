@@ -478,7 +478,9 @@ function recallMemory(sender, context) {
       var returnValue = memory.sentence;
       returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
       sendTextMessage(sender, returnValue);
-    }
+    } else {
+			sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
+		}
 	});
 }
 // -------------------------------------------- //
