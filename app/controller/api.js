@@ -248,15 +248,15 @@ function intentConfidence(sender, message) {
     }
     console.log("Confidence score " + confidence);
 
+		const context = extractAllContext(data.entities);
+		console.log(context);
+
     if (intent != null) {
       switch(intent) {
         case "storeMemory":
-          console.log(data);
+					console.log('storeMemory');
+          console.log(JSON.stringify(data));
           try {
-            // Eventually we should save confidence levels to Algolia too
-            const context = data.entities.context.map(function(context) {
-              return context.value;
-            })
             const sentence = rewriteSentence(data._text);
             console.log(context, sentence);
             if (context != null && sentence != null) {
@@ -273,9 +273,6 @@ function intentConfidence(sender, message) {
         case "recall":
           console.log("this is a recall");
           try {
-            const context = data.entities.context.map(function(context) {
-              return context.value;
-            })
             console.log(context);
             if (context != null) {
               recallMemory(sender, context);
@@ -467,7 +464,9 @@ function saveMemory(sender, context, sentence) {
 }
 function recallMemory(sender, context) {
   console.log('Searching Algolia.....');
-  AlgoliaIndex.search(context.join(' '), {}, function searchDone(err, content) { // Middle parameter may not be necessary
+	const searchTerm = context.map(function(e){return e.value}).join(' ');
+	console.log('searchTerm: ', searchTerm);
+  AlgoliaIndex.search(searchTerm, {}, function searchDone(err, content) { // Middle parameter may not be necessary
 		if (err) {
       console.log(err);
 		}
@@ -547,4 +546,25 @@ function rewriteSentence(sentence) { // Currently very primitive!
   sentence = sentence.trim();
   if(!~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence+=".";
   return sentence;
+}
+
+
+function extractAllContext(e) {
+	const entities = e; // Hopefully this avoids deleting/editing things in the original entities object outside this function!
+	var contextArray = [];
+	if (entities.intent) delete entities.intent;
+	const names1 = Object.keys(entities);
+	names1.forEach(function(name1) {
+		entities[name1].forEach(function(entity) {
+			if (entity.entities) {
+				const names2 = Object.keys(entity.entities);
+				names2.forEach(function(name2) {
+					contextArray = contextArray.concat(entity.entities[name2])
+				});
+				delete entity.entities;
+			}
+			contextArray.push(entity);
+		})
+	})
+	return contextArray;
 }
