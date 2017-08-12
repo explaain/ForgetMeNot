@@ -21,6 +21,9 @@ const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
 var first_name = "";
 var id = "";
 
+var expectingAttachment = false;
+var holdingAttachment = false;
+
 // Wit AI
 var witClient = new Wit({
   accessToken: properties.wit_ai_server_access,
@@ -117,6 +120,27 @@ exports.handleMessage = function(req, res) {
 	            }
 	          }
 	    		}
+					if (event.message.attachments) {
+						const attachmentUrl = event.message.attachments[0].payload.url;
+						const attachmentType = event.message.attachments[0].type;
+						if (expectingAttachment) {
+							expectingAttachment.attachments = [
+								{
+									type: attachmentType,
+									url: attachmentUrl
+								}
+							];
+							saveMemory(expectingAttachment.sender, expectingAttachment.context, expectingAttachment.sentence, expectingAttachment.attachments);
+							expectingAttachment = false;
+						} else {
+							holdingAttachment = {
+								type: attachmentType,
+								url: attachmentUrl
+							};
+						}
+						console.log('expectingAttachment: ', expectingAttachment);
+						console.log('holdingAttachment: ', holdingAttachment);
+					}
 				}
       }
     }
@@ -152,7 +176,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
 function callSendAPI(messageData) {
   request({
     uri: properties.facebook_message_endpoint,
-    qs: { access_token: properties.facebook_token },
+    qs: { access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token) },
     method: 'POST',
     json: messageData
   }, function (error, response, body) {
@@ -210,7 +234,7 @@ function sendGenericMessage(recipientId) {
     },
     message: {
 			attachment: {
-	      type:"image",
+	      type: "image",
 	      payload: {
 	        url: dunnoGifs[Math.floor(Math.random() * dunnoGifs.length)]
 	      }
@@ -234,6 +258,22 @@ function sendTextMessage(recipientId, messageText) {
   };
   callSendAPI(messageData);
 }
+function sendAttachmentMessage(recipientId, attachmentType, attachmentUrl) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+			attachment: {
+	      type: attachmentType,
+	      payload: {
+	        url: attachmentUrl
+	      }
+	    }
+    }
+  };
+  callSendAPI(messageData);
+}
 
 function firstMessage(recipientId) {
   var messageData = {
@@ -250,7 +290,7 @@ function firstMessage(recipientId) {
 function fetchFacebookData(recipientId) {
   console.log("inside the request");
   request({
-    uri: properties.facebook_user_endpoint + recipientId + "fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + properties.facebook_token,
+    uri: properties.facebook_user_endpoint + recipientId + "fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token),
     method: "POST",
     json: {
 
@@ -286,6 +326,7 @@ function intentConfidence(sender, message) {
     }
     console.log("Confidence score " + confidence);
 
+		expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
 		const context = extractAllContext(data.entities);
 		console.log(context);
 
@@ -298,8 +339,19 @@ function intentConfidence(sender, message) {
             const sentence = rewriteSentence(data._text);
             console.log(context, sentence);
             if (context != null && sentence != null) {
-              console.log("Trying to process reminder \n");
-              saveMemory(sender, context, sentence); // New Context-Sentence method
+							if (expectAttachment) {
+								if (holdingAttachment) {
+									saveMemory(sender, context, sentence, [holdingAttachment]);
+									holdingAttachment = false;
+								} else {
+									expectingAttachment = {sender: sender, context: context, sentence: sentence};
+								}
+								console.log('expectingAttachment: ', expectingAttachment);
+								console.log('holdingAttachment: ', holdingAttachment);
+							} else {
+								console.log("Trying to process reminder \n");
+								saveMemory(sender, context, sentence); // New Context-Sentence method
+							}
             } else {
               console.log("I'm sorry but this couldn't be processed. \n");
             }
@@ -487,16 +539,22 @@ function returnKeyValue(id, subject) {
 
 
 // ----------Context-Value-Sentence Method------------- //
-function saveMemory(sender, context, sentence) {
+function saveMemory(sender, context, sentence, attachments) {
   //Should first check whether a record with this Context-Value-Sentence combination already exists
 
-  const memory = {sender: sender, context: context, sentence: sentence};
+  const memory = {sender: sender, context: context, sentence: sentence, attachments: attachments};
   AlgoliaIndex.addObject(memory, function(err, content){
     if (err) {
       sendTextMessage(id, "I couldn't remember that");
     } else {
       console.log('User memory successfully!');
       sendTextMessage(sender, "I've now remembered that for you! " + sentence);
+
+			if (attachments) {
+				setTimeout(function() {
+					sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
+				}, 500)
+			}
     }
   });
 }
@@ -514,7 +572,13 @@ function recallMemory(sender, context) {
       console.log(memory + "\n");
       var returnValue = memory.sentence;
       returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
-      sendTextMessage(sender, returnValue);
+			if (memory.attachments) {
+				if(!~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue+=":";
+				setTimeout(function() {
+					sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
+				}, 500)
+			}
+			sendTextMessage(sender, returnValue);
     } else {
 			sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
 		}
@@ -579,9 +643,10 @@ function rewriteSentence(sentence) { // Currently very primitive!
     sentence = sentence.replace(r, '');
   });
   my.forEach(function(m) {
-    sentence = sentence.replace(m, 'Your ');
+    sentence = sentence.replace(m, 'your ');
   });
   sentence = sentence.trim();
+	sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1)
   if(!~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence+=".";
   return sentence;
 }

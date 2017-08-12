@@ -1,5 +1,5 @@
 // Facebook properties
-exports.facebook_token = 'EAAGwqXF0cOUBAGcrz4mjaiERevuL47UWMZB3LZCGnBIkgNwZAzkisK1ZBaHWyO1gdKL5EOZBoGxOuRzZCO2MRUiwWdQ9gnhLkoxvCfg7GxLtdBxyoVktRjuZBmdQ4UwXPnMcOh0A5j8NGz93GYptscOqpRdHuzEXZBZBBIvrJ4YBuFAZDZD';
+exports.facebook_token = 'EAAGwqXF0cOUBAEp3ne8vBXrlgdXsaxZA9CiT8yrWYGLSleOEQmzk99Qg47YYhlkWE79oV5AGyuBZADWbTDOZA7rlvcGZAoq9ytz8kZCE4jm5EFUrd9iSVWzOzZAzpPfc04ZAE46KTqnD7C7r5hmuSuLhVznSZBZBPDuxoMyRLB10bZBQZDZD';
 exports.facebook_challenge = 'forgetmenot_bot_token';
 exports.facebook_message_endpoint = 'https://graph.facebook.com/v2.6/me/messages';
 exports.facebook_user_endpoint = 'https://graph.facebook.com/v2.6/';
