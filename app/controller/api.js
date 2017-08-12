@@ -81,40 +81,43 @@ exports.handleMessage = function(req, res) {
       fetchFacebookData(sender);
       firstMessage(sender);
     } else {
-      if (event.message && event.message.text) {
-  		  	text = event.message.text;
-  		  	// Handle a text message from this sender
-          switch(text) {
-            case "location":
-              setTimeZone(sender)
-              break;
-            case "subscribe":
-              subscribeUser(sender)
-              break;
-            case "unsubscribe":
-              unsubscribeUser(sender)
-              break;
-            case "subscribestatus":
-              subscribeStatus(sender)
-              break;
-            case "test memory":
-              newTimeBasedMemory(sender)
-              break;
-            case "set timezone":
-              setLocation(sender)
-              break;
-            case "whats my time zone":
-              userLocation(sender)
-              break;
-            case "test this":
-              updateUserLocation(sender, "Bristol")
-              break;
-            default: {
-              intentConfidence(sender, text);
-              //witResponse(sender, text);
-            }
-          }
-    		}
+			console.log(JSON.stringify(event.message));
+      if (event.message) {
+	      if (event.message.text) {
+	  		  	text = event.message.text;
+	  		  	// Handle a text message from this sender
+	          switch(text) {
+	            case "location":
+	              setTimeZone(sender)
+	              break;
+	            case "subscribe":
+	              subscribeUser(sender)
+	              break;
+	            case "unsubscribe":
+	              unsubscribeUser(sender)
+	              break;
+	            case "subscribestatus":
+	              subscribeStatus(sender)
+	              break;
+	            case "test memory":
+	              newTimeBasedMemory(sender)
+	              break;
+	            case "set timezone":
+	              setLocation(sender)
+	              break;
+	            case "whats my time zone":
+	              userLocation(sender)
+	              break;
+	            case "test this":
+	              updateUserLocation(sender, "Bristol")
+	              break;
+	            default: {
+	              intentConfidence(sender, text);
+	              //witResponse(sender, text);
+	            }
+	          }
+	    		}
+				}
       }
     }
 	res.sendStatus(200);
@@ -182,6 +185,41 @@ function sendGenericMessage(recipientId) {
     }
   };
   callSendAPI(messageData);
+
+	const dunnoGifs = [
+		'https://media.giphy.com/media/fKk2I5iiWGN0I/giphy.gif',
+		'https://media.giphy.com/media/y65VoOlimZaus/giphy.gif',
+		'https://media.giphy.com/media/Q3cRXFWYEBtzW/giphy.gif',
+		'https://media.giphy.com/media/zqTa7p7qvyfbW/giphy.gif',
+		'https://media.giphy.com/media/xUPGcovyHtUZ6ldnlC/giphy.gif',
+		'https://media.giphy.com/media/l3vRiGJzSIg7OoiWI/giphy.gif',
+		'https://media.giphy.com/media/zqF12WgFHJevu/giphy.gif',
+		'https://media.giphy.com/media/PFAAoSsNrAObu/giphy.gif',
+		'https://media.giphy.com/media/bkKvvzE9PEcTK/giphy.gif',
+		'https://media.giphy.com/media/14tvbepZ8vhU40/giphy.gif',
+		'https://media.giphy.com/media/G5X63GrrLjjVK/giphy.gif',
+		'https://media.giphy.com/media/K6VhXtbgCXqQU/giphy.gif',
+		'https://media.giphy.com/media/3ornjSL2sBcPflIDiU/giphy.gif',
+		'https://media.giphy.com/media/FxEwsOF1D79za/giphy.gif',
+		'https://media.giphy.com/media/8GclDP2l4qbx6/giphy.gif'
+	]
+
+  var messageData2 = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+			attachment: {
+	      type:"image",
+	      payload: {
+	        url: dunnoGifs[Math.floor(Math.random() * dunnoGifs.length)]
+	      }
+	    }
+    }
+  };
+	setTimeout(function() {
+		callSendAPI(messageData2);
+	},500)
 }
 
 /* function sends message back to user */
