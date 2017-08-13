@@ -375,7 +375,8 @@ function intentConfidence(sender, message) {
           break;
 
         default:
-          witResponse(sender, text);
+					sendGenericMessage(sender);
+          // witResponse(sender, text);
           break;
 
       }
@@ -542,7 +543,7 @@ function returnKeyValue(id, subject) {
 function saveMemory(sender, context, sentence, attachments) {
   //Should first check whether a record with this Context-Value-Sentence combination already exists
 
-  const memory = {sender: sender, context: context, sentence: sentence, attachments: attachments};
+  const memory = {sender: sender, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
   AlgoliaIndex.addObject(memory, function(err, content){
     if (err) {
       sendTextMessage(id, "I couldn't remember that");
@@ -558,11 +559,17 @@ function saveMemory(sender, context, sentence, attachments) {
     }
   });
 }
-function recallMemory(sender, context) {
+function recallMemory(sender, context, attachments) {
   console.log('Searching Algolia.....');
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
 	console.log('searchTerm: ', searchTerm);
-  AlgoliaIndex.search(searchTerm, {}, function searchDone(err, content) { // Middle parameter may not be necessary
+  AlgoliaIndex.search({
+		  query: searchTerm,
+		  // filters: 'sentence: "This is your pal."'
+		  // filters: 'hasAttachments: true'
+		  // filters: (attachments ? 'hasAttachments: true' : '')
+		},
+		function searchDone(err, content) { // Middle parameter may not be necessary
 		if (err) {
       console.log(err);
 		}
