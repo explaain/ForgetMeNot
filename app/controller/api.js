@@ -374,6 +374,10 @@ function intentConfidence(sender, message) {
           }
           break;
 
+				case "setTask":
+					sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!")
+					break;
+
         default:
 					sendGenericMessage(sender);
           // witResponse(sender, text);
