@@ -375,7 +375,8 @@ function intentConfidence(sender, message) {
           break;
 
 				case "setTask":
-					sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!")
+					sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!");
+					sendAttachmentMessage(sender, 'image', "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif");
 					break;
 
         default:
