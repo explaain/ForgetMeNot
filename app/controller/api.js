@@ -16,6 +16,9 @@ const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algoli
 	protocol: 'https:'
 });
 const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
+const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
+
+const crypto = require("crypto");
 
 // user information global variable
 var first_name = "";
@@ -90,6 +93,9 @@ exports.handleMessage = function(req, res) {
 	  		  	text = event.message.text;
 	  		  	// Handle a text message from this sender
 	          switch(text) {
+	            case "account":
+	              fetchFacebookData(sender);
+	              break;
 	            case "location":
 	              setTimeZone(sender)
 	              break;
@@ -289,13 +295,14 @@ function firstMessage(recipientId) {
 
 function fetchFacebookData(recipientId) {
   console.log("inside the request");
+	console.log(properties.facebook_user_endpoint + recipientId + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token));
   request({
-    uri: properties.facebook_user_endpoint + recipientId + "fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token),
-    method: "POST",
-    json: {
-
-    }
-  });
+    uri: properties.facebook_user_endpoint + recipientId + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token),
+    method: "GET"
+  }, function (error, response, body) {
+		console.log(body);
+		createUserAccount(JSON.parse(body));
+	});
   console.log("out of the request");
 }
 
@@ -351,6 +358,7 @@ function intentConfidence(sender, message) {
 							} else {
 								console.log("Trying to process reminder \n");
 								saveMemory(sender, context, sentence); // New Context-Sentence method
+								holdingAttachment = false;
 							}
             } else {
               console.log("I'm sorry but this couldn't be processed. \n");
@@ -467,6 +475,25 @@ function updateUserLocation(id, newLocation) {
     }
   });
 }
+
+function createUserAccount(userData) {
+	// Generate the value to be used for the Secure API key
+	const searchOnlyApiKey = userData.id + '_' + crypto.randomBytes(12).toString('hex');
+
+	// Generate Secure API token using this value
+	const params = {
+		filters: 'userID:' + userData.id + ' OR public = true',
+		restrictIndices: properties.algolia_index,
+		userToken: userData.id
+	};
+	var publicKey = AlgoliaClient.generateSecuredApiKey(searchOnlyApiKey, params);
+
+	// Save userData to 'users' Algolia index
+	userData.objectID = userData.id;
+	userData.searchOnlyApiKey = searchOnlyApiKey;
+	delete userData.id;
+	AlgoliaUsersIndex.addObject(userData, function(err, content) {});
+}
 // -------------------------------------------- //
 
 
@@ -548,7 +575,7 @@ function returnKeyValue(id, subject) {
 function saveMemory(sender, context, sentence, attachments) {
   //Should first check whether a record with this Context-Value-Sentence combination already exists
 
-  const memory = {sender: sender, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
+  const memory = {userID: sender, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
   AlgoliaIndex.addObject(memory, function(err, content){
     if (err) {
       sendTextMessage(id, "I couldn't remember that");
@@ -570,6 +597,7 @@ function recallMemory(sender, context, attachments) {
 	console.log('searchTerm: ', searchTerm);
   AlgoliaIndex.search({
 		  query: searchTerm,
+			filters: 'userID: ' + sender
 		  // filters: 'sentence: "This is your pal."'
 		  // filters: 'hasAttachments: true'
 		  // filters: (attachments ? 'hasAttachments: true' : '')
@@ -578,6 +606,8 @@ function recallMemory(sender, context, attachments) {
 		if (err) {
       console.log(err);
 		}
+
+		console.log('content.hits.length: ', content.hits.length);
 
     if (content.hits.length) {
       memory = content.hits[0]; // Assumes first result is only option
