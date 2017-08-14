@@ -354,7 +354,8 @@ function witResponse(recipientId, message) {
 // check wit.ai's confidence for the intent
 function intentConfidence(sender, message) {
   var intent = null;
-  witClient.message(message, {})
+	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
+  witClient.message(messageToWit, {})
   .then((data) => {
     console.log('Wit response: ', JSON.stringify(data) + "\n");
     try {
@@ -373,6 +374,18 @@ function intentConfidence(sender, message) {
 
     if (intent != null) {
       switch(intent) {
+				case "greeting":
+					sendTextMessage("Hello there!")
+					break;
+				case "thanks":
+					sendTextMessage("You're very welcome!")
+					break;
+				case "humour":
+					sendTextMessage("Lol!")
+					break;
+				case "bye":
+					sendTextMessage("It's been fun!")
+					break;
         case "storeMemory":
 					console.log('storeMemory');
           try {

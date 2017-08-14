@@ -1,7 +1,8 @@
 // Facebook properties
-exports.facebook_token = 'EAAGwqXF0cOUBAEp3ne8vBXrlgdXsaxZA9CiT8yrWYGLSleOEQmzk99Qg47YYhlkWE79oV5AGyuBZADWbTDOZA7rlvcGZAoq9ytz8kZCE4jm5EFUrd9iSVWzOzZAzpPfc04ZAE46KTqnD7C7r5hmuSuLhVznSZBZBPDuxoMyRLB10bZBQZDZD';
+exports.facebook_token = 'EAAax7Dt5jFsBAHCkBlj637Rp1xrOqCYRO2GxwnNPZABvjEorkWmHCnyiZAg8M3A1RO7cDgNfwFZA15opPiGCLongGjs4ZC0JfPNxpCLaAhqjVWzEywduzTD1ahAzuFN6gEVCF88eSiEjn2pWzCoRaTraapJ4A3x91Ia3eSRrDQZDZD';
 exports.facebook_challenge = 'forgetmenot_bot_token';
 exports.facebook_message_endpoint = 'https://graph.facebook.com/v2.6/me/messages';
+exports.facebook_message_attachments_endpoint = 'https://graph.facebook.com/v2.6/me/message_attachments';
 exports.facebook_user_endpoint = 'https://graph.facebook.com/v2.6/';
 
 // Google Maps api
