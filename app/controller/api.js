@@ -80,6 +80,7 @@ exports.handleMessage = function(req, res) {
   for (i = 0; i < messaging_events.length; i++) {
 		event = req.body.entry[0].messaging[i];
 		sender = event.sender.id;
+		sendSenderAction(sender, 'typing_on');
     try {
       postback = event.postback.payload;
     } catch (err) {}
@@ -253,6 +254,15 @@ function sendGenericMessage(recipientId) {
 }
 
 /* function sends message back to user */
+function sendSenderAction(recipientId, sender_action) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    sender_action: sender_action
+  };
+  callSendAPI(messageData);
+}
 function sendTextMessage(recipientId, messageText) {
   var messageData = {
     recipient: {
