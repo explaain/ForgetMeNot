@@ -212,35 +212,17 @@ function receivedMessage(event) {
   console.log("Message data: ", event.message);
 }
 
-function sendGenericMessage(recipientId) {
+function sendGenericMessage(recipientId, type) {
   // Bot didnt know what to do with message from user
   var messageData = {
     recipient: {
       id: recipientId
     },
     message: {
-      text: "I'm sorry I didn't quite understand that, I'm still learning though!"
+      text: Randoms.texts[type][Math.floor(Math.random() * Randoms.texts[type].length)]
     }
   };
   callSendAPI(messageData);
-
-	const dunnoGifs = [
-		'https://media.giphy.com/media/fKk2I5iiWGN0I/giphy.gif',
-		'https://media.giphy.com/media/y65VoOlimZaus/giphy.gif',
-		'https://media.giphy.com/media/Q3cRXFWYEBtzW/giphy.gif',
-		'https://media.giphy.com/media/zqTa7p7qvyfbW/giphy.gif',
-		'https://media.giphy.com/media/xUPGcovyHtUZ6ldnlC/giphy.gif',
-		'https://media.giphy.com/media/l3vRiGJzSIg7OoiWI/giphy.gif',
-		'https://media.giphy.com/media/zqF12WgFHJevu/giphy.gif',
-		'https://media.giphy.com/media/PFAAoSsNrAObu/giphy.gif',
-		'https://media.giphy.com/media/bkKvvzE9PEcTK/giphy.gif',
-		'https://media.giphy.com/media/14tvbepZ8vhU40/giphy.gif',
-		'https://media.giphy.com/media/G5X63GrrLjjVK/giphy.gif',
-		'https://media.giphy.com/media/K6VhXtbgCXqQU/giphy.gif',
-		'https://media.giphy.com/media/3ornjSL2sBcPflIDiU/giphy.gif',
-		'https://media.giphy.com/media/FxEwsOF1D79za/giphy.gif',
-		'https://media.giphy.com/media/8GclDP2l4qbx6/giphy.gif'
-	]
 
   var messageData2 = {
     recipient: {
@@ -250,14 +232,12 @@ function sendGenericMessage(recipientId) {
 			attachment: {
 	      type: "image",
 	      payload: {
-	        url: dunnoGifs[Math.floor(Math.random() * dunnoGifs.length)]
+	        url: Randoms.gifs[type][Math.floor(Math.random() * Randoms.gifs[type].length)]
 	      }
 	    }
     }
   };
-	setTimeout(function() {
-		callSendAPI(messageData2);
-	},500)
+	callSendAPI(messageData2);
 }
 
 /* function sends message back to user */
@@ -364,7 +344,7 @@ function intentConfidence(sender, message) {
       var confidence = JSON.stringify(data.entities.intent[0].confidence);
     } catch(err) {
       console.log("no intent - send generic fail message");
-      sendGenericMessage(sender);
+      sendGenericMessage(sender, 'dunno');
     }
     console.log("Confidence score " + confidence);
 
@@ -375,16 +355,16 @@ function intentConfidence(sender, message) {
     if (intent != null) {
       switch(intent) {
 				case "greeting":
-					sendTextMessage("Hello there!")
+					sendGenericMessage(sender, 'greeting');
 					break;
 				case "thanks":
-					sendTextMessage("You're very welcome!")
+					sendGenericMessage(sender, 'thanks');
 					break;
 				case "humour":
-					sendTextMessage("Lol!")
+					sendGenericMessage(sender, 'humour');
 					break;
 				case "bye":
-					sendTextMessage("It's been fun!")
+					sendGenericMessage(sender, 'bye');
 					break;
         case "storeMemory":
 					console.log('storeMemory');
@@ -410,7 +390,7 @@ function intentConfidence(sender, message) {
               console.log("I'm sorry but this couldn't be processed. \n");
             }
           } catch (err) {
-            sendGenericMessage(sender);
+            sendGenericMessage(sender, 'dunno');
           }
           break;
 
@@ -424,7 +404,7 @@ function intentConfidence(sender, message) {
               console.log("I'm sorry but this couldn't be processed. \n");
             }
           } catch (err) {
-            sendGenericMessage(sender);
+            sendGenericMessage(sender, 'dunno');
           }
           break;
 
@@ -434,7 +414,7 @@ function intentConfidence(sender, message) {
 					break;
 
         default:
-					sendGenericMessage(sender);
+					sendGenericMessage(sender, 'dunno');
           // witResponse(sender, text);
           break;
 
@@ -769,3 +749,77 @@ function extractAllContext(e) {
 	})
 	return contextArray;
 }
+
+Randoms = {
+	texts: {},
+	gifs: {}
+};
+
+Randoms.texts.dunno = [
+	"I'm sorry I didn't quite understand that, I'm still learning though!"
+]
+Randoms.gifs.dunno = [
+	'https://media.giphy.com/media/fKk2I5iiWGN0I/giphy.gif',
+	'https://media.giphy.com/media/y65VoOlimZaus/giphy.gif',
+	'https://media.giphy.com/media/Q3cRXFWYEBtzW/giphy.gif',
+	'https://media.giphy.com/media/zqTa7p7qvyfbW/giphy.gif',
+	'https://media.giphy.com/media/xUPGcovyHtUZ6ldnlC/giphy.gif',
+	'https://media.giphy.com/media/l3vRiGJzSIg7OoiWI/giphy.gif',
+	'https://media.giphy.com/media/zqF12WgFHJevu/giphy.gif',
+	'https://media.giphy.com/media/PFAAoSsNrAObu/giphy.gif',
+	'https://media.giphy.com/media/bkKvvzE9PEcTK/giphy.gif',
+	'https://media.giphy.com/media/14tvbepZ8vhU40/giphy.gif',
+	'https://media.giphy.com/media/G5X63GrrLjjVK/giphy.gif',
+	'https://media.giphy.com/media/K6VhXtbgCXqQU/giphy.gif',
+	'https://media.giphy.com/media/3ornjSL2sBcPflIDiU/giphy.gif',
+	'https://media.giphy.com/media/FxEwsOF1D79za/giphy.gif',
+	'https://media.giphy.com/media/8GclDP2l4qbx6/giphy.gif'
+];
+
+Randoms.texts.greeting = [
+ 'Hello there!',
+ 'Nice to see you',
+ 'Hi 😊',
+ 'Hello and welcome 🙂'
+];
+Randoms.gifs.greeting = [
+ 'https://media.giphy.com/media/dzaUX7CAG0Ihi/giphy.gif',
+ 'https://media.giphy.com/media/mW05nwEyXLP0Y/giphy.gif',
+ 'https://media.giphy.com/media/3o7TKA2a0EX25VqbMk/giphy.gif',
+ 'https://media.giphy.com/media/pcwaLYOQb3xN6/giphy.gif'
+];
+
+Randoms.texts.thanks = [
+ 'You\'re welcome!',
+ 'No problem 🙂',
+ 'No problem!',
+ 'Happy to help 🙂'
+];
+Randoms.gifs.thanks = [
+ 'https://media.giphy.com/media/3o85xwxr06YNoFdSbm/giphy.gif',
+ 'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
+ 'https://media.giphy.com/media/l41lZxzroU33typuU/giphy.gif',
+ 'https://media.giphy.com/media/k39w535jFPYrK/giphy.gif'
+];
+
+Randoms.texts.bye = [
+ 'Bye for now!',
+ 'Cheerio! ',
+ 'Chat again soon!',
+];
+Randoms.gifs.bye = [
+ 'https://media.giphy.com/media/l0IydZclkNcC6NZa8/giphy.gif',
+ 'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
+ 'https://media.giphy.com/media/TUJyGPCtQ7ZUk/giphy.gif',
+];
+
+Randoms.texts.humour = [
+ 'haha, that was funny!',
+ 'too funny 😂',
+ 'Now that was funny!',
+];
+Randoms.gifs.humour = [
+ 'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif',
+ 'https://media.giphy.com/media/CoDp6NnSmItoY/giphy.gif',
+ 'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif',
+];
