@@ -641,36 +641,45 @@ function recallMemory(sender, context, attachments) {
   console.log('Searching Algolia.....');
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
 	console.log('searchTerm: ', searchTerm);
-  AlgoliaIndex.search({
-		  query: searchTerm,
-			filters: 'userID: ' + sender
-		  // filters: 'sentence: "This is your pal."'
-		  // filters: 'hasAttachments: true'
-		  // filters: (attachments ? 'hasAttachments: true' : '')
+	AlgoliaUsersIndex.getObject(sender, ['readAccess'], function(err, content) {
+		console.log('content');
+		console.log(content);
+		const readAccessList = content.readAccess || [];
+		const userIdFilterString = 'userID: ' + sender + readAccessList.map(function(id) {
+			return ' OR userID: ' + id
+		}).join('');
+		console.log(userIdFilterString);
+		AlgoliaIndex.search({
+			query: searchTerm,
+			filters: userIdFilterString
+			// filters: 'sentence: "This is your pal."'
+			// filters: 'hasAttachments: true'
+			// filters: (attachments ? 'hasAttachments: true' : '')
 		},
 		function searchDone(err, content) { // Middle parameter may not be necessary
-		if (err) {
-      console.log(err);
-		}
-
-		console.log('content.hits.length: ', content.hits.length);
-
-    if (content.hits.length) {
-      memory = content.hits[0]; // Assumes first result is only option
-      console.log(memory + "\n");
-      var returnValue = memory.sentence;
-      returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
-			if (memory.attachments) {
-				if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
-				returnValue+=":";
-				setTimeout(function() {
-					sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
-				}, 500)
+			if (err) {
+				console.log(err);
 			}
-			sendTextMessage(sender, returnValue);
-    } else {
-			sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
-		}
+
+			console.log('content.hits.length: ', content.hits.length);
+
+			if (content.hits.length) {
+				memory = content.hits[0]; // Assumes first result is only option
+				console.log(memory + "\n");
+				var returnValue = memory.sentence;
+				returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
+				if (memory.attachments) {
+					if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
+					returnValue+=":";
+					setTimeout(function() {
+						sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
+					}, 500)
+				}
+				sendTextMessage(sender, returnValue);
+			} else {
+				sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
+			}
+		});
 	});
 }
 // -------------------------------------------- //
