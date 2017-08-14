@@ -75,61 +75,64 @@ exports.fbInformation = function() {
 
 /* Recieve request */
 exports.handleMessage = function(req, res) {
-  messaging_events = req.body.entry[0].messaging;
-  postback = null;
-  for (i = 0; i < messaging_events.length; i++) {
-		event = req.body.entry[0].messaging[i];
-		sender = event.sender.id;
-		sendSenderAction(sender, 'typing_on');
-    try {
-      postback = event.postback.payload;
-    } catch (err) {}
-    if (postback == 'first_connection') {
-      fetchFacebookData(sender);
-      firstMessage(sender);
-    } else {
-			console.log(JSON.stringify(event.message));
-      if (event.message) {
-	      if (event.message.text) {
-	  		  	text = event.message.text;
-	  		  	// Handle a text message from this sender
-	          switch(text) {
-	            case "account":
-	              fetchFacebookData(sender);
-	              break;
-	            case "location":
-	              setTimeZone(sender)
-	              break;
-	            case "subscribe":
-	              subscribeUser(sender)
-	              break;
-	            case "unsubscribe":
-	              unsubscribeUser(sender)
-	              break;
-	            case "subscribestatus":
-	              subscribeStatus(sender)
-	              break;
-	            case "test memory":
-	              newTimeBasedMemory(sender)
-	              break;
-	            case "set timezone":
-	              setLocation(sender)
-	              break;
-	            case "whats my time zone":
-	              userLocation(sender)
-	              break;
-	            case "test this":
-	              updateUserLocation(sender, "Bristol")
-	              break;
-	            default: {
-	              intentConfidence(sender, text);
-	              //witResponse(sender, text);
-	            }
-	          }
-	    		}
+	try {
+		messaging_events = req.body.entry[0].messaging;
+		postback = null;
+		for (i = 0; i < messaging_events.length; i++) {
+			event = req.body.entry[0].messaging[i];
+			console.log(JSON.stringify(event));
+			sender = event.sender.id;
+			sendSenderAction(sender, 'typing_on');
+			try {
+				postback = event.postback.payload;
+			} catch (err) {}
+			if (postback == 'first_connection') {
+				fetchFacebookData(sender);
+				firstMessage(sender);
+			} else {
+				console.log(JSON.stringify(event.message));
+				if (event.message) {
+					if (event.message.text) {
+						text = event.message.text;
+						// Handle a text message from this sender
+						switch(text) {
+							case "account":
+							fetchFacebookData(sender);
+							break;
+							case "location":
+							setTimeZone(sender)
+							break;
+							case "subscribe":
+							subscribeUser(sender)
+							break;
+							case "unsubscribe":
+							unsubscribeUser(sender)
+							break;
+							case "subscribestatus":
+							subscribeStatus(sender)
+							break;
+							case "test memory":
+							newTimeBasedMemory(sender)
+							break;
+							case "set timezone":
+							setLocation(sender)
+							break;
+							case "whats my time zone":
+							userLocation(sender)
+							break;
+							case "test this":
+							updateUserLocation(sender, "Bristol")
+							break;
+							default: {
+								intentConfidence(sender, text);
+								//witResponse(sender, text);
+							}
+						}
+					}
 					if (event.message.attachments) {
-						const attachmentUrl = event.message.attachments[0].payload.url;
 						const attachmentType = event.message.attachments[0].type;
+						const attachmentUrl = attachmentType=='fallback' ? event.message.attachments[0].url : event.message.attachments[0].payload.url;
+
 						if (expectingAttachment) {
 							expectingAttachment.attachments = [
 								{
@@ -149,8 +152,12 @@ exports.handleMessage = function(req, res) {
 						console.log('holdingAttachment: ', holdingAttachment);
 					}
 				}
-      }
-    }
+			}
+		}
+	} catch(e) {
+		console.log('-- Error processing the webhook! --')
+		console.log(e)
+	}
 	res.sendStatus(200);
 }
 
@@ -180,9 +187,9 @@ curl -X POST -H "Content-Type: application/json" -d '{
 */
 
 /* being able to send the message */
-function callSendAPI(messageData) {
+function callSendAPI(messageData, alternativeEndpoint) {
   request({
-    uri: properties.facebook_message_endpoint,
+    uri: (alternativeEndpoint || properties.facebook_message_endpoint),
     qs: { access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token) },
     method: 'POST',
     json: messageData
@@ -290,6 +297,23 @@ function sendAttachmentMessage(recipientId, attachmentType, attachmentUrl) {
   };
   callSendAPI(messageData);
 }
+function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+			attachment: {
+	      type: attachmentType,
+	      payload: {
+	        url: attachmentUrl,
+					'is_reusable': true
+	      }
+	    }
+    }
+  };
+  callSendAPI(messageData, properties.facebook_message_attachments_endpoint);
+}
 
 function firstMessage(recipientId) {
   var messageData = {
@@ -351,7 +375,6 @@ function intentConfidence(sender, message) {
       switch(intent) {
         case "storeMemory":
 					console.log('storeMemory');
-          console.log(JSON.stringify(data));
           try {
             const sentence = rewriteSentence(data._text);
             console.log(context, sentence);
@@ -625,7 +648,8 @@ function recallMemory(sender, context, attachments) {
       var returnValue = memory.sentence;
       returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
 			if (memory.attachments) {
-				if(!~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue+=":";
+				if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
+				returnValue+=":";
 				setTimeout(function() {
 					sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
 				}, 500)
@@ -699,7 +723,7 @@ function rewriteSentence(sentence) { // Currently very primitive!
   });
   sentence = sentence.trim();
 	sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1)
-  if(!~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence+=".";
+  if (~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence = sentence.substring(0, sentence.length - 1);
   return sentence;
 }
 
