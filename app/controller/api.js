@@ -601,20 +601,27 @@ function returnKeyValue(id, subject) {
 function saveMemory(sender, context, sentence, attachments) {
   //Should first check whether a record with this Context-Value-Sentence combination already exists
 
-  const memory = {userID: sender, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
-  AlgoliaIndex.addObject(memory, function(err, content){
-    if (err) {
-      sendTextMessage(id, "I couldn't remember that");
-    } else {
-      console.log('User memory successfully!');
-      sendTextMessage(sender, "I've now remembered that for you! " + sentence);
 
-			if (attachments) {
-				setTimeout(function() {
-					sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
-				}, 500)
-			}
-    }
+	AlgoliaUsersIndex.getObject(sender, ['uploadTo'], function(err, content) {
+		console.log('content');
+		console.log(content);
+		const uploadTo = content.uploadTo || sender;
+
+	  const memory = {userID: uploadTo, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
+	  AlgoliaIndex.addObject(memory, function(err, content){
+	    if (err) {
+	      sendTextMessage(id, "I couldn't remember that");
+	    } else {
+	      console.log('User memory successfully!');
+	      sendTextMessage(sender, "I've now remembered that for you! " + sentence);
+
+				if (attachments) {
+					setTimeout(function() {
+						sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
+					}, 500)
+				}
+	    }
+	  });
   });
 }
 function recallMemory(sender, context, attachments) {
