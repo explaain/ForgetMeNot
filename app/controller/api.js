@@ -387,6 +387,9 @@ function intentConfidence(sender, message) {
 				case "bye":
 					sendGenericMessage(sender, 'bye');
 					break;
+				case "pleasure":
+					sendGenericMessage(sender, 'pleasure');
+					break;
 				case "dissatisfaction":
 					sendGenericMessage(sender, 'dissatisfaction');
 					break;
@@ -871,6 +874,13 @@ Randoms.gifs.humour = [
  'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif',
  'https://media.giphy.com/media/CoDp6NnSmItoY/giphy.gif',
  'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif',
+];
+
+Randoms.texts.pleasure = [
+ 'Yup, life is good! 😎',
+];
+Randoms.gifs.pleasure = [
+ 'https://media.giphy.com/media/a0h7sAqON67nO/giphy.gif',
 ];
 
 Randoms.texts.dissatisfaction = [
