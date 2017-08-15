@@ -1,4 +1,3 @@
-
 var request = require('request');
 var properties = require('../config/properties.js');
 var googleMapsClient = require('../api_clients/googleMapsClient.js');
@@ -24,8 +23,7 @@ const crypto = require("crypto");
 var first_name = "";
 var id = "";
 
-var expectingAttachment = {};
-var holdingAttachment = {};
+const Context = {};
 
 // Wit AI
 var witClient = new Wit({
@@ -82,6 +80,9 @@ exports.handleMessage = function(req, res) {
 			event = req.body.entry[0].messaging[i];
 			console.log(JSON.stringify(event));
 			sender = event.sender.id;
+			if (!Context[sender]) Context[sender] = {
+				lastResults: []
+			}
 			sendSenderAction(sender, 'typing_on');
 			try {
 				postback = event.postback.payload;
@@ -133,17 +134,17 @@ exports.handleMessage = function(req, res) {
 						const attachmentType = event.message.attachments[0].type;
 						const attachmentUrl = attachmentType=='fallback' ? event.message.attachments[0].url : event.message.attachments[0].payload.url;
 
-						if (expectingAttachment[sender]) {
-							expectingAttachment[sender].attachments = [
+						if (Context[sender].expectingAttachment) {
+							Context[sender].expectingAttachment.attachments = [
 								{
 									type: attachmentType,
 									url: attachmentUrl
 								}
 							];
-							saveMemory(expectingAttachment[sender].userID, expectingAttachment[sender].context, expectingAttachment[sender].sentence, expectingAttachment[sender].attachments);
-							delete expectingAttachment[sender];
+							saveMemory(Context[sender].expectingAttachment.userID, Context[sender].expectingAttachment.context, Context[sender].expectingAttachment.sentence, Context[sender].expectingAttachment.attachments);
+							delete Context[sender].expectingAttachment;
 						} else {
-							holdingAttachment[sender] = {
+							Context[sender].holdingAttachment = {
 								userID: sender,
 								type: attachmentType,
 								url: attachmentUrl
@@ -152,6 +153,8 @@ exports.handleMessage = function(req, res) {
 						}
 						console.log('expectingAttachment: ', expectingAttachment);
 						console.log('holdingAttachment: ', holdingAttachment);
+					} else {
+						delete Context[sender].expectingAttachment;
 					}
 				}
 			}
@@ -372,32 +375,28 @@ function intentConfidence(sender, message) {
 				case "dissatisfaction":
 					sendGenericMessage(sender, 'dissatisfaction');
 					break;
+				case "nextResult":
+					tryAnotherMemory(sender);
+					break;
         case "storeMemory":
 					console.log('storeMemory');
           try {
             var sentence = rewriteSentence(data._text);
             console.log(context, sentence);
             if (context != null && sentence != null) {
-							console.log(sentence);
-							console.log(sentence);
-							console.log(expectAttachment);
 							if (expectAttachment) {
 								sentence+=" ⬇️";
-								console.log('1 expectingAttachment: ', expectingAttachment);
-								console.log('1 holdingAttachment: ', holdingAttachment);
-								if (holdingAttachment[sender]) {
-									saveMemory(sender, context, sentence, [holdingAttachment[sender]]);
-									delete holdingAttachment[sender];
+								if (Context[sender].holdingAttachment) {
+									saveMemory(sender, context, sentence, [Context[sender].holdingAttachment]);
+									delete Context[sender].holdingAttachment;
 								} else {
-									expectingAttachment[sender] = {userID: sender, context: context, sentence: sentence};
+									Context[sender].expectingAttachment = {userID: sender, context: context, sentence: sentence};
 									sendSenderAction(sender, 'typing_off');
 								}
-								console.log('expectingAttachment: ', expectingAttachment);
-								console.log('holdingAttachment: ', holdingAttachment);
 							} else {
 								console.log("Trying to process reminder \n");
 								saveMemory(sender, context, sentence); // New Context-Sentence method
-								delete holdingAttachment[sender];
+								delete Context[sender].holdingAttachment;
 							}
             } else {
               console.log("I'm sorry but this couldn't be processed. \n");
@@ -661,26 +660,39 @@ function recallMemory(sender, context, attachments) {
 				console.log(err);
 			}
 
-			console.log('content.hits.length: ', content.hits.length);
-
 			if (content.hits.length) {
+				Context[sender].lastResults = content.hits;
+				Context[sender].lastResultTried = 0;
+				// console.log('Context[sender].lastResults:');
+				// console.log(Context[sender].lastResults);
+				// console.log('Context[sender].lastResultTried:');
+				// console.log(Context[sender].lastResultTried);
 				memory = content.hits[0]; // Assumes first result is only option
-				console.log(memory + "\n");
-				var returnValue = memory.sentence;
-				returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
-				if (memory.attachments) {
-					if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
-					returnValue+=" ⬇️";
-					setTimeout(function() {
-						sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
-					}, 500)
-				}
-				sendTextMessage(sender, returnValue);
+				sendResult(sender, memory);
 			} else {
 				sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
 			}
 		});
 	});
+}
+
+function sendResult(sender, memory) {
+	var returnValue = memory.sentence;
+	returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
+	if (memory.attachments) {
+		if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
+		returnValue+=" ⬇️";
+		setTimeout(function() {
+			sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
+		}, 500)
+	}
+	sendTextMessage(sender, returnValue);
+}
+
+function tryAnotherMemory(sender) {
+	const memory = Context[sender].lastResults[Context[sender].lastResultTried+1];
+	sendResult(sender, memory);
+	Context[sender].lastResultTried++;
 }
 // -------------------------------------------- //
 
