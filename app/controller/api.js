@@ -1,5 +1,6 @@
 var request = require('request');
 var properties = require('../config/properties.js');
+var schedule = require('node-schedule');
 var googleMapsClient = require('../api_clients/googleMapsClient.js');
 var Wit = require('node-wit').Wit;
 //var interactive = require('node-wit').interactive;
@@ -635,23 +636,36 @@ function saveMemory(sender, context, sentence, attachments) {
 	AlgoliaUsersIndex.getObject(sender, ['uploadTo'], function(err, content) {
 		console.log('content');
 		console.log(content);
-		const uploadTo = content.uploadTo || sender;
+		const uploadTo = content ? content.uploadTo || sender : sender;
 
 	  const memory = {userID: uploadTo, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
-	  AlgoliaIndex.addObject(memory, function(err, content){
-	    if (err) {
-	      sendTextMessage(id, "I couldn't remember that");
-	    } else {
-	      console.log('User memory successfully!');
-	      sendTextMessage(sender, "I've now remembered that for you! " + sentence);
+		//Check whether it looks too similar to an existing one (for now using whatever memory bank you're uploading to)
+		AlgoliaIndex.search({
+			query: sentence,
+			filters: 'userID: ' + uploadTo
+		},
+		function searchDone(err, content) {
+			if (err) {
+				console.log(err);
+			}
 
-				if (attachments) {
-					setTimeout(function() {
-						sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
-					}, 500)
+
+
+			AlgoliaIndex.addObject(memory, function(err, content){
+				if (err) {
+					sendTextMessage(id, "I couldn't remember that");
+				} else {
+					console.log('User memory successfully!');
+					sendTextMessage(sender, "I've now remembered that for you! " + sentence);
+
+					if (attachments) {
+						setTimeout(function() {
+							sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
+						}, 500)
+					}
 				}
-	    }
-	  });
+			});
+		});
   });
 }
 function recallMemory(sender, context, attachments) {
@@ -677,6 +691,8 @@ function recallMemory(sender, context, attachments) {
 			if (err) {
 				console.log(err);
 			}
+
+			console.log(JSON.stringify(content));
 
 			if (content.hits.length) {
 				Context[sender].lastResults = content.hits;
@@ -829,63 +845,71 @@ Randoms.gifs.dunno = [
 ];
 
 Randoms.texts.greeting = [
- 'Hello there!',
- 'Nice to see you',
- 'Hi 😊',
- 'Hello and welcome 🙂'
+	'Hello there!',
+	'Nice to see you',
+	'Hi 😊',
+	'Hello and welcome 🙂'
 ];
 Randoms.gifs.greeting = [
- 'https://media.giphy.com/media/dzaUX7CAG0Ihi/giphy.gif',
- 'https://media.giphy.com/media/mW05nwEyXLP0Y/giphy.gif',
- 'https://media.giphy.com/media/3o7TKA2a0EX25VqbMk/giphy.gif',
- 'https://media.giphy.com/media/pcwaLYOQb3xN6/giphy.gif'
+	'https://media.giphy.com/media/dzaUX7CAG0Ihi/giphy.gif',
+	'https://media.giphy.com/media/mW05nwEyXLP0Y/giphy.gif',
+	'https://media.giphy.com/media/3o7TKA2a0EX25VqbMk/giphy.gif',
+	'https://media.giphy.com/media/pcwaLYOQb3xN6/giphy.gif'
 ];
 
 Randoms.texts.thanks = [
- 'You\'re welcome!',
- 'No problem 🙂',
- 'No problem!',
- 'Happy to help 🙂'
+	'You\'re welcome!',
+	'No problem 🙂',
+	'No problem!',
+	'Happy to help 🙂'
 ];
 Randoms.gifs.thanks = [
- 'https://media.giphy.com/media/3o85xwxr06YNoFdSbm/giphy.gif',
- 'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
- 'https://media.giphy.com/media/l41lZxzroU33typuU/giphy.gif',
- 'https://media.giphy.com/media/k39w535jFPYrK/giphy.gif'
+	'https://media.giphy.com/media/3o85xwxr06YNoFdSbm/giphy.gif',
+	'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
+	'https://media.giphy.com/media/l41lZxzroU33typuU/giphy.gif',
+	'https://media.giphy.com/media/k39w535jFPYrK/giphy.gif'
 ];
 
 Randoms.texts.bye = [
- 'Bye for now!',
- 'Cheerio! ',
- 'Chat again soon!',
+	'Bye for now!',
+	'Cheerio! ',
+	'Chat again soon!',
 ];
 Randoms.gifs.bye = [
- 'https://media.giphy.com/media/l0IydZclkNcC6NZa8/giphy.gif',
- 'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
- 'https://media.giphy.com/media/TUJyGPCtQ7ZUk/giphy.gif',
+	'https://media.giphy.com/media/l0IydZclkNcC6NZa8/giphy.gif',
+	'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
+	'https://media.giphy.com/media/TUJyGPCtQ7ZUk/giphy.gif',
 ];
 
 Randoms.texts.humour = [
- 'haha, that was funny!',
- 'too funny 😂',
- 'Now that was funny!',
+	'haha, that was funny!',
+	'too funny 😂',
+	'Now that was funny!',
 ];
 Randoms.gifs.humour = [
- 'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif',
- 'https://media.giphy.com/media/CoDp6NnSmItoY/giphy.gif',
- 'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif',
+	'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif',
+	'https://media.giphy.com/media/CoDp6NnSmItoY/giphy.gif',
+	'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif',
 ];
 
 Randoms.texts.pleasure = [
- 'Yup, life is good! 😎',
+	'Pretty cool, huh 😎',
+	'We make a great team!',
+	'Right back at ya 🙌',
 ];
 Randoms.gifs.pleasure = [
- 'https://media.giphy.com/media/a0h7sAqON67nO/giphy.gif',
+	'https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif',
+  'https://media.giphy.com/media/JVdF14CQQH7gs/giphy.gif',
+  'https://media.giphy.com/media/IxKt9HOM1mI80/giphy.gif',
 ];
 
 Randoms.texts.dissatisfaction = [
- 'Whoops, sorry if I annoyed you! 😳 I\'m always striving to be better',
+	'Oh no, I\'m sorry, let\'s try again 🙏',
+  'Oops, sorry about that',
+  'Sorry for messing up, can we try again?',
 ];
 Randoms.gifs.dissatisfaction = [
- 'https://media.giphy.com/media/14aUO0Mf7dWDXW/giphy.gif',
+	'https://media.giphy.com/media/gnJgBlPgHtcnS/giphy.gif',
+  'https://media.giphy.com/media/26AHLspJScv2J6P0k/giphy.gif',
+  'https://media.giphy.com/media/4TELhlB0hYTC/giphy.gif',
 ];
