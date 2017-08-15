@@ -728,6 +728,8 @@ function setLocation(sender) {
 
 function rewriteSentence(sentence) { // Currently very primitive!
   const remember = [
+    /^Remember that/,
+		/^remember that/,
     /^Remember/,
     /^remember/,
     /^Remind me/,
