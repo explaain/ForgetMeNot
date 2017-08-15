@@ -97,6 +97,9 @@ exports.handleMessage = function(req, res) {
 						text = event.message.text;
 						// Handle a text message from this sender
 						switch(text) {
+							case "begin":
+							firstMessage(sender);
+							break;
 							case "account":
 							fetchFacebookData(sender);
 							break;
@@ -306,10 +309,22 @@ function firstMessage(recipientId) {
       id: recipientId
     },
     message: {
-      text: "Hello there"
+      text: "Hello there!"
     }
   };
   callSendAPI(messageData);
+	setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
+	setTimeout(function() {
+		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot🤖, your helpful friend with (if I say so myself) a pretty darn good memory! 😇");
+		setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
+		setTimeout(function() {
+			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍");
+			setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
+			setTimeout(function() {
+				sendTextMessage(recipientId, "Here are a few ideas for things you can ask me to remember right now: \n\n1. What your cousin's new baby is called 👼 \n2. What wine you had that you really liked 🍷 \n3. Your National Insurance number 💳");
+			}, 6000);
+		}, 4000);
+	}, 1000);
 }
 
 function fetchFacebookData(recipientId) {
