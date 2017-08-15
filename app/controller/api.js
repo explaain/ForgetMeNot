@@ -366,6 +366,9 @@ function intentConfidence(sender, message) {
 				case "bye":
 					sendGenericMessage(sender, 'bye');
 					break;
+				case "dissatisfaction":
+					sendGenericMessage(sender, 'dissatisfaction');
+					break;
         case "storeMemory":
 					console.log('storeMemory');
           try {
@@ -829,4 +832,11 @@ Randoms.gifs.humour = [
  'https://media.giphy.com/media/3oEjHAUOqG3lSS0f1C/giphy.gif',
  'https://media.giphy.com/media/CoDp6NnSmItoY/giphy.gif',
  'https://media.giphy.com/media/3NtY188QaxDdC/giphy.gif',
+];
+
+Randoms.texts.dissatisfaction = [
+ 'Whoops, sorry if I annoyed you! 😳 I\'m always striving to be better',
+];
+Randoms.gifs.dissatisfaction = [
+ 'https://media.giphy.com/media/14aUO0Mf7dWDXW/giphy.gif',
 ];
