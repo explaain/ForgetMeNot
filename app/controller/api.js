@@ -728,18 +728,18 @@ function setLocation(sender) {
 
 function rewriteSentence(sentence) { // Currently very primitive!
   const remember = [
-    'Remember',
-    'remember',
-    'Remind me',
-    'remind me'
+    /^Remember/,
+    /^remember/,
+    /^Remind me/,
+    /^remind me/,
   ];
+	remember.forEach(function(r) {
+		sentence = sentence.replace(r, '');
+	});
   const my = [
     'My ',
     'my '
   ];
-  remember.forEach(function(r) {
-    sentence = sentence.replace(r, '');
-  });
   my.forEach(function(m) {
     sentence = sentence.replace(m, 'your ');
   });
