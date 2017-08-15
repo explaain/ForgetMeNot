@@ -24,8 +24,8 @@ const crypto = require("crypto");
 var first_name = "";
 var id = "";
 
-var expectingAttachment = false;
-var holdingAttachment = false;
+var expectingAttachment = {};
+var holdingAttachment = {};
 
 // Wit AI
 var witClient = new Wit({
@@ -133,20 +133,22 @@ exports.handleMessage = function(req, res) {
 						const attachmentType = event.message.attachments[0].type;
 						const attachmentUrl = attachmentType=='fallback' ? event.message.attachments[0].url : event.message.attachments[0].payload.url;
 
-						if (expectingAttachment) {
-							expectingAttachment.attachments = [
+						if (expectingAttachment[sender]) {
+							expectingAttachment[sender].attachments = [
 								{
 									type: attachmentType,
 									url: attachmentUrl
 								}
 							];
-							saveMemory(expectingAttachment.sender, expectingAttachment.context, expectingAttachment.sentence, expectingAttachment.attachments);
-							expectingAttachment = false;
+							saveMemory(expectingAttachment[sender].userID, expectingAttachment[sender].context, expectingAttachment[sender].sentence, expectingAttachment[sender].attachments);
+							delete expectingAttachment[sender];
 						} else {
-							holdingAttachment = {
+							holdingAttachment[sender] = {
+								userID: sender,
 								type: attachmentType,
 								url: attachmentUrl
 							};
+							sendSenderAction(sender, 'typing_off');
 						}
 						console.log('expectingAttachment: ', expectingAttachment);
 						console.log('holdingAttachment: ', holdingAttachment);
@@ -349,6 +351,7 @@ function intentConfidence(sender, message) {
     console.log("Confidence score " + confidence);
 
 		expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
+		console.log(expectAttachment);
 		const context = extractAllContext(data.entities);
 		console.log(context);
 
@@ -372,22 +375,29 @@ function intentConfidence(sender, message) {
         case "storeMemory":
 					console.log('storeMemory');
           try {
-            const sentence = rewriteSentence(data._text);
+            var sentence = rewriteSentence(data._text);
             console.log(context, sentence);
             if (context != null && sentence != null) {
+							console.log(sentence);
+							console.log(sentence);
+							console.log(expectAttachment);
 							if (expectAttachment) {
-								if (holdingAttachment) {
-									saveMemory(sender, context, sentence, [holdingAttachment]);
-									holdingAttachment = false;
+								sentence+=" ⬇️";
+								console.log('1 expectingAttachment: ', expectingAttachment);
+								console.log('1 holdingAttachment: ', holdingAttachment);
+								if (holdingAttachment[sender]) {
+									saveMemory(sender, context, sentence, [holdingAttachment[sender]]);
+									delete holdingAttachment[sender];
 								} else {
-									expectingAttachment = {sender: sender, context: context, sentence: sentence};
+									expectingAttachment[sender] = {userID: sender, context: context, sentence: sentence};
+									sendSenderAction(sender, 'typing_off');
 								}
 								console.log('expectingAttachment: ', expectingAttachment);
 								console.log('holdingAttachment: ', holdingAttachment);
 							} else {
 								console.log("Trying to process reminder \n");
 								saveMemory(sender, context, sentence); // New Context-Sentence method
-								holdingAttachment = false;
+								delete holdingAttachment[sender];
 							}
             } else {
               console.log("I'm sorry but this couldn't be processed. \n");
@@ -660,7 +670,7 @@ function recallMemory(sender, context, attachments) {
 				returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
 				if (memory.attachments) {
 					if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
-					returnValue+=":";
+					returnValue+=" ⬇️";
 					setTimeout(function() {
 						sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
 					}, 500)
