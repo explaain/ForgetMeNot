@@ -326,6 +326,7 @@ function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
 }
 
 function firstMessage(recipientId) {
+	Context[sender].onboarding = true;
   var messageData = {
     recipient: {
       id: recipientId
@@ -337,13 +338,13 @@ function firstMessage(recipientId) {
   callSendAPI(messageData);
 	setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 	setTimeout(function() {
-		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot🤖, your helpful friend with (if I say so myself) a pretty darn good memory! 😇");
+		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇");
 		setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 		setTimeout(function() {
 			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍");
 			setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 			setTimeout(function() {
-				sendTextMessage(recipientId, "Here are a few ideas for things you can ask me to remember right now: \n\n1. What your cousin's new baby is called 👼 \n2. What wine you had that you really liked 🍷 \n3. Your National Insurance number 💳");
+				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \"My secret superpower is invisibility\"");
 			}, 6000);
 		}, 4000);
 	}, 1000);
@@ -677,7 +678,6 @@ function saveMemory(sender, context, sentence, attachments) {
 				console.log(h._rankingInfo);
 			})
 
-
 			AlgoliaIndex.addObject(memory, function(err, content){
 				if (err) {
 					sendTextMessage(id, "I couldn't remember that");
@@ -689,6 +689,11 @@ function saveMemory(sender, context, sentence, attachments) {
 						setTimeout(function() {
 							sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
 						}, 500)
+					}
+					if (Context[sender].onboarding) {
+						setTimeout(function() {
+							sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"");
+						}, 1500)
 					}
 				}
 			});
@@ -725,14 +730,19 @@ function recallMemory(sender, context, attachments) {
 			if (content.hits.length) {
 				Context[sender].lastResults = content.hits;
 				Context[sender].lastResultTried = 0;
-				// console.log('Context[sender].lastResults:');
-				// console.log(Context[sender].lastResults);
-				// console.log('Context[sender].lastResultTried:');
-				// console.log(Context[sender].lastResultTried);
 				memory = content.hits[0]; // Assumes first result is only option
 				sendResult(sender, memory);
 			} else {
 				sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
+			}
+
+			if (Context[sender].onboarding) {
+				setTimeout(function() {
+					sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮");
+					setTimeout(function() {
+						sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...");
+					}, 3000)
+				}, 1500)
 			}
 		});
 	});
