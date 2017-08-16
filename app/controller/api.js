@@ -741,6 +741,7 @@ function recallMemory(sender, context, attachments) {
 					sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮");
 					setTimeout(function() {
 						sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...");
+						Context[sender].onboarding = false;
 					}, 3000)
 				}, 1500)
 			}
