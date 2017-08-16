@@ -85,6 +85,7 @@ exports.handleMessage = function(req, res) {
 				lastResults: [],
 				consecutiveFails: 0
 			}
+			if (!Context[sender].totalFailCount) Context[sender].totalFailCount = 0;
 			Context[sender].failing = false;
 			sendSenderAction(sender, 'typing_on');
 			try {
@@ -239,6 +240,9 @@ function receivedMessage(event) {
 
 function giveUp(sender) {
 	Context[sender].failing = true;
+	Context[sender].totalFailCount++;
+	console.log('Context[sender].totalFailCount');
+	console.log(Context[sender].totalFailCount);
 	if (Context[sender].consecutiveFails < 4) Context[sender].consecutiveFails++;
 	sendGenericMessage(sender, 'dunno', Context[sender].consecutiveFails);
 }
@@ -256,7 +260,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
   };
   callSendAPI(messageData);
 
-	if (Randoms.gifs[type]) {
+	if (Randoms.gifs[type] && (type!='dunno' || Context[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(Context[recipientId].totalFailCount/4))==0 )) {
 		const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
 		var messageData2 = {
 			recipient: {
@@ -339,6 +343,7 @@ function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl, memory
 
 function firstMessage(recipientId) {
 	Context[sender].onboarding = true;
+
   var messageData = {
     recipient: {
       id: recipientId
