@@ -709,7 +709,7 @@ function recallMemory(sender, context, attachments) {
 		console.log(userIdFilterString);
 		const messageToAlgolia = searchTerm.substring(0, 511); // Only sends Algolia the first 511 characters as it can't handle more than that
 		AlgoliaIndex.search({
-			query: 'messageToAlgolia',
+			query: messageToAlgolia,
 			filters: userIdFilterString
 			// filters: 'sentence: "This is your pal."'
 			// filters: 'hasAttachments: true'
