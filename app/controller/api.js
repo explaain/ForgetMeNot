@@ -198,7 +198,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
 */
 
 /* being able to send the message */
-function callSendAPI(messageData, alternativeEndpoint) {
+function callSendAPI(messageData, alternativeEndpoint, memory) {
 	console.log('Context[sender].failing');
 	console.log(Context[sender].failing);
 	if (messageData.message && !Context[sender].failing) {
@@ -214,10 +214,16 @@ function callSendAPI(messageData, alternativeEndpoint) {
     json: messageData
   }, function (error, response, body) {
     if (!error && response.statusCode == 200) {
-      var recipientId = body.recipient_id;
-      var messageId = body.message_id;
-      console.log("Successfully sent message with id %s to recipient %s",
-      messageId, recipientId);
+			if (body.recipientId) {
+				var recipientId = body.recipient_id;
+				var messageId = body.message_id;
+				console.log("Successfully sent message with id %s to recipient %s",
+				messageId, recipientId);
+			} else if (body.attachment_id) {
+				console.log('body.attachment_id', body.attachment_id);
+				memory.attachments[0].attachment_id = body.attachment_id;
+				saveToDb(sender, memory);
+			}
     } else {
       console.error("Unable to send message.");
       //console.error(response);
@@ -291,23 +297,29 @@ function sendTextMessage(recipientId, messageText) {
   };
   callSendAPI(messageData);
 }
-function sendAttachmentMessage(recipientId, attachmentType, attachmentUrl) {
+function sendAttachmentMessage(recipientId, attachment) {
+	const messageAttachment = attachment.attachment_id ? {
+		type: attachment.type,
+		payload: {
+			attachment_id: attachment.attachment_id
+		}
+	} : {
+		type: attachment.type,
+		payload: {
+			url: attachment.url
+		}
+	}
   var messageData = {
     recipient: {
       id: recipientId
     },
     message: {
-			attachment: {
-	      type: attachmentType,
-	      payload: {
-	        url: attachmentUrl
-	      }
-	    }
+			attachment: messageAttachment
     }
   };
   callSendAPI(messageData);
 }
-function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
+function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl, memory) {
   var messageData = {
     recipient: {
       id: recipientId
@@ -322,7 +334,7 @@ function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
 	    }
     }
   };
-  callSendAPI(messageData, properties.facebook_message_attachments_endpoint);
+  callSendAPI(messageData, properties.facebook_message_attachments_endpoint, memory);
 }
 
 function firstMessage(recipientId) {
@@ -463,7 +475,7 @@ function intentConfidence(sender, message) {
 
 				case "setTask":
 					sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!");
-					sendAttachmentMessage(sender, 'image', "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif");
+					sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
 					break;
 
         default:
@@ -678,28 +690,38 @@ function saveMemory(sender, context, sentence, attachments) {
 				console.log(h._rankingInfo);
 			})
 
-			AlgoliaIndex.addObject(memory, function(err, content){
-				if (err) {
-					sendTextMessage(id, "I couldn't remember that");
-				} else {
-					console.log('User memory successfully!');
-					sendTextMessage(sender, "I've now remembered that for you! " + sentence);
-
-					if (attachments) {
-						setTimeout(function() {
-							sendAttachmentMessage(sender, attachments[0].type, attachments[0].url)
-						}, 500)
-					}
-					if (Context[sender].onboarding) {
-						setTimeout(function() {
-							sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"");
-						}, 1500)
-					}
-				}
-			});
+			if (attachments) {
+				sendAttachmentUpload(sender, attachments[0].type, attachments[0].url, memory)
+			} else {
+				saveToDb(sender, memory);
+			}
 		});
   });
 }
+
+function saveToDb(sender, memory) {
+	AlgoliaIndex.addObject(memory, function(err, content){
+		if (err) {
+			sendTextMessage(id, "I couldn't remember that");
+		} else {
+			console.log('User memory successfully!');
+			sendTextMessage(sender, "I've now remembered that for you! " + memory.sentence);
+
+			if (memory.attachments) {
+				setTimeout(function() {
+					sendAttachmentMessage(sender, memory.attachments[0])
+				}, 500)
+			}
+			if (Context[sender].onboarding) {
+				setTimeout(function() {
+					sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"");
+				}, 1500)
+			}
+		}
+	});
+}
+
+
 function recallMemory(sender, context, attachments) {
   console.log('Searching Algolia.....');
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
@@ -725,7 +747,7 @@ function recallMemory(sender, context, attachments) {
 				console.log(err);
 			}
 
-			console.log(JSON.stringify(content));
+			console.log(content);
 
 			if (content.hits.length) {
 				Context[sender].lastResults = content.hits;
@@ -756,7 +778,7 @@ function sendResult(sender, memory) {
 		if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
 		returnValue+=" ⬇️";
 		setTimeout(function() {
-			sendAttachmentMessage(sender, memory.attachments[0].type, memory.attachments[0].url)
+			sendAttachmentMessage(sender, memory.attachments[0])
 		}, 500)
 	}
 	sendTextMessage(sender, returnValue);
