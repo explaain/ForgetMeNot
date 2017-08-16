@@ -82,8 +82,10 @@ exports.handleMessage = function(req, res) {
 			console.log(JSON.stringify(event));
 			sender = event.sender.id;
 			if (!Context[sender]) Context[sender] = {
-				lastResults: []
+				lastResults: [],
+				consecutiveFails: 0
 			}
+			Context[sender].failing = false;
 			sendSenderAction(sender, 'typing_on');
 			try {
 				postback = event.postback.payload;
@@ -197,6 +199,14 @@ curl -X POST -H "Content-Type: application/json" -d '{
 
 /* being able to send the message */
 function callSendAPI(messageData, alternativeEndpoint) {
+	console.log('Context[sender].failing');
+	console.log(Context[sender].failing);
+	if (messageData.message && !Context[sender].failing) {
+		Context[sender].consecutiveFails = 0;
+	}
+	console.log('Context[sender].consecutiveFails');
+	console.log(Context[sender].consecutiveFails);
+	console.log(messageData);
   request({
     uri: (alternativeEndpoint || properties.facebook_message_endpoint),
     qs: { access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token) },
@@ -221,32 +231,43 @@ function receivedMessage(event) {
   console.log("Message data: ", event.message);
 }
 
-function sendGenericMessage(recipientId, type) {
+function giveUp(sender) {
+	Context[sender].failing = true;
+	if (Context[sender].consecutiveFails < 4) Context[sender].consecutiveFails++;
+	sendGenericMessage(sender, 'dunno', Context[sender].consecutiveFails);
+}
+
+function sendGenericMessage(recipientId, type, optionalCounter) {
   // Bot didnt know what to do with message from user
+	const text = optionalCounter ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
   var messageData = {
     recipient: {
       id: recipientId
     },
     message: {
-      text: Randoms.texts[type][Math.floor(Math.random() * Randoms.texts[type].length)]
+      text: text[Math.floor(Math.random() * text.length)]
     }
   };
   callSendAPI(messageData);
 
-  var messageData2 = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-			attachment: {
-	      type: "image",
-	      payload: {
-	        url: Randoms.gifs[type][Math.floor(Math.random() * Randoms.gifs[type].length)]
-	      }
-	    }
-    }
-  };
-	callSendAPI(messageData2);
+	if (Randoms.gifs[type]) {
+		const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
+		var messageData2 = {
+			recipient: {
+				id: recipientId
+			},
+			message: {
+				attachment: {
+					type: "image",
+					payload: {
+						url: gif[Math.floor(Math.random() * gif.length)]
+					}
+				}
+			}
+		};
+		callSendAPI(messageData2);
+	}
+
 }
 
 /* function sends message back to user */
@@ -365,7 +386,7 @@ function intentConfidence(sender, message) {
       var confidence = JSON.stringify(data.entities.intent[0].confidence);
     } catch(err) {
       console.log("no intent - send generic fail message");
-      sendGenericMessage(sender, 'dunno');
+			giveUp(sender);
     }
     console.log("Confidence score " + confidence);
 
@@ -400,7 +421,7 @@ function intentConfidence(sender, message) {
         case "storeMemory":
 					console.log('storeMemory');
           try {
-            var sentence = rewriteSentence(data._text);
+            var sentence = rewriteSentence(message);
             console.log(context, sentence);
             if (context != null && sentence != null) {
 							if (expectAttachment) {
@@ -421,7 +442,7 @@ function intentConfidence(sender, message) {
               console.log("I'm sorry but this couldn't be processed. \n");
             }
           } catch (err) {
-            sendGenericMessage(sender, 'dunno');
+            giveUp(sender);
           }
           break;
 
@@ -435,7 +456,7 @@ function intentConfidence(sender, message) {
               console.log("I'm sorry but this couldn't be processed. \n");
             }
           } catch (err) {
-            sendGenericMessage(sender, 'dunno');
+            giveUp(sender);
           }
           break;
 
@@ -445,7 +466,8 @@ function intentConfidence(sender, message) {
 					break;
 
         default:
-					sendGenericMessage(sender, 'dunno');
+					giveUp(sender);
+
           // witResponse(sender, text);
           break;
 
@@ -640,15 +662,20 @@ function saveMemory(sender, context, sentence, attachments) {
 
 	  const memory = {userID: uploadTo, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
 		//Check whether it looks too similar to an existing one (for now using whatever memory bank you're uploading to)
+		const messageToAlgolia = sentence.substring(0, 500); // Only sends Algolia the first 511 characters as it can't handle more than that
 		AlgoliaIndex.search({
-			query: sentence,
-			filters: 'userID: ' + uploadTo
+			query: messageToAlgolia,
+			filters: 'userID: ' + uploadTo,
+			getRankingInfo: true
 		},
 		function searchDone(err, content) {
 			if (err) {
 				console.log(err);
 			}
-
+			console.log(content);
+			content.hits.forEach(function(h) {
+				console.log(h._rankingInfo);
+			})
 
 
 			AlgoliaIndex.addObject(memory, function(err, content){
@@ -680,8 +707,9 @@ function recallMemory(sender, context, attachments) {
 			return ' OR userID: ' + id
 		}).join('');
 		console.log(userIdFilterString);
+		const messageToAlgolia = searchTerm.substring(0, 511); // Only sends Algolia the first 511 characters as it can't handle more than that
 		AlgoliaIndex.search({
-			query: searchTerm,
+			query: 'messageToAlgolia',
 			filters: userIdFilterString
 			// filters: 'sentence: "This is your pal."'
 			// filters: 'hasAttachments: true'
@@ -823,10 +851,12 @@ Randoms = {
 	gifs: {}
 };
 
-Randoms.texts.dunno = [
+Randoms.texts.dunno = [];
+Randoms.gifs.dunno = [];
+Randoms.texts.dunno[1] = [
 	"I'm sorry I didn't quite understand that, I'm still learning though!"
 ]
-Randoms.gifs.dunno = [
+Randoms.gifs.dunno[1] = [
 	'https://media.giphy.com/media/fKk2I5iiWGN0I/giphy.gif',
 	'https://media.giphy.com/media/y65VoOlimZaus/giphy.gif',
 	'https://media.giphy.com/media/Q3cRXFWYEBtzW/giphy.gif',
@@ -843,6 +873,15 @@ Randoms.gifs.dunno = [
 	'https://media.giphy.com/media/FxEwsOF1D79za/giphy.gif',
 	'https://media.giphy.com/media/8GclDP2l4qbx6/giphy.gif'
 ];
+Randoms.texts.dunno[2] = [
+	"Still don't understand, sorry! 😳"
+]
+Randoms.texts.dunno[3] = [
+	"Three fails in a row, how embarrassing! 🤒"
+]
+Randoms.texts.dunno[4] = [
+	"Still confused - I think I'm just going to give up...."
+]
 
 Randoms.texts.greeting = [
 	'Hello there!',
