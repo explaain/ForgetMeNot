@@ -199,7 +199,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
 */
 
 function prepareAndSendMessages(messageData, alternativeEndpoint, memory) {
-	const textArray = messageData.message ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
+	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
 	const messageDataArray = textArray.map(function(text) {
 		const data = JSON.parse(JSON.stringify(messageData));
 		if (text) data.message.text = text;
