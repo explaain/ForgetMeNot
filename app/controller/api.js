@@ -183,7 +183,7 @@ exports.handleMessage = function(req, res) {
       payload:"first connection"
     }]
   };
-  callSendAPI(data);
+  prepareAndSendMessages(data);
 }
 
 curl -X POST -H "Content-Type: application/json" -d '{
@@ -197,6 +197,25 @@ curl -X POST -H "Content-Type: application/json" -d '{
  }' "https://graph.facebook.com/v2.6/me/thread_settings?access_token=EAASK9LRTpCQBAGuZBYYhyJZBA9ZBfxZAX8X431tDkpZCEJzFu1JjrAANKEAD4kq86kAxVdsEIPNc0BHlLHo0wCh9vZAQO6qCSTGAvZA33Wwq8mrDcZCF6J41Lu7KVIA9pSIcQAS3ZCAW5nruqj9BDH8h7PKenNJ0x3a29lv6VTWcszwZDZD"
 
 */
+
+function prepareAndSendMessages(messageData, alternativeEndpoint, memory) {
+	const textArray = messageData.message ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
+	const messageDataArray = textArray.map(function(text) {
+		const data = JSON.parse(JSON.stringify(messageData));
+		if (text) data.message.text = text;
+		return data;
+	})
+	messageDataArray.forEach(function(message, i, array) {
+		setTimeout(function() {
+			callSendAPI(message, alternativeEndpoint, memory);
+		}, 2000*i)
+		if (i<array.length-1) {
+			setTimeout(function() {
+				sendSenderAction(sender, 'typing_on');
+			}, 2100*i)
+		}
+	});
+}
 
 /* being able to send the message */
 function callSendAPI(messageData, alternativeEndpoint, memory) {
@@ -214,6 +233,7 @@ function callSendAPI(messageData, alternativeEndpoint, memory) {
     method: 'POST',
     json: messageData
   }, function (error, response, body) {
+		console.log(response.statusCode);
     if (!error && response.statusCode == 200) {
 			if (body.recipientId) {
 				var recipientId = body.recipient_id;
@@ -258,7 +278,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
       text: text[Math.floor(Math.random() * text.length)]
     }
   };
-  callSendAPI(messageData);
+  prepareAndSendMessages(messageData);
 
 	if (Randoms.gifs[type] && (type!='dunno' || Context[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(Context[recipientId].totalFailCount/4))==0 )) {
 		const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
@@ -275,7 +295,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
 				}
 			}
 		};
-		callSendAPI(messageData2);
+		prepareAndSendMessages(messageData2);
 	}
 
 }
@@ -288,9 +308,11 @@ function sendSenderAction(recipientId, sender_action) {
     },
     sender_action: sender_action
   };
-  callSendAPI(messageData);
+  prepareAndSendMessages(messageData);
 }
 function sendTextMessage(recipientId, messageText) {
+	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
+	messageText = messageText.replace(/"/g, '').replace(/'/g, '').replace(/\//g, '').replace(/‘/g, '').replace(/’/g, '').replace(/’/g, '');
   var messageData = {
     recipient: {
       id: recipientId
@@ -299,7 +321,7 @@ function sendTextMessage(recipientId, messageText) {
       text: messageText
     }
   };
-  callSendAPI(messageData);
+  prepareAndSendMessages(messageData);
 }
 function sendAttachmentMessage(recipientId, attachment) {
 	const messageAttachment = attachment.attachment_id ? {
@@ -321,7 +343,7 @@ function sendAttachmentMessage(recipientId, attachment) {
 			attachment: messageAttachment
     }
   };
-  callSendAPI(messageData);
+  prepareAndSendMessages(messageData);
 }
 function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl, memory) {
   var messageData = {
@@ -338,7 +360,7 @@ function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl, memory
 	    }
     }
   };
-  callSendAPI(messageData, properties.facebook_message_attachments_endpoint, memory);
+  prepareAndSendMessages(messageData, properties.facebook_message_attachments_endpoint, memory);
 }
 
 function firstMessage(recipientId) {
@@ -352,7 +374,7 @@ function firstMessage(recipientId) {
       text: "Hello there!"
     }
   };
-  callSendAPI(messageData);
+  prepareAndSendMessages(messageData);
 	setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 	setTimeout(function() {
 		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇");
@@ -778,7 +800,6 @@ function recallMemory(sender, context, attachments) {
 
 function sendResult(sender, memory) {
 	var returnValue = memory.sentence;
-	returnValue = returnValue.replace(/"/g, ''); // Unsure whether this is necessary
 	if (memory.attachments) {
 		if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
 		returnValue+=" ⬇️";
@@ -882,6 +903,32 @@ function extractAllContext(e) {
 		})
 	})
 	return contextArray;
+}
+
+function longMessageToArrayOfMessages(message, limit) { // limit is in characters
+	var counter = 0;
+	var messageArray = [];
+	while (message.length > limit && counter < 30) { // Once confident this loop won't be infinite we can remove the counter
+		const split = splitChunk(message, limit);
+		messageArray.push(split[0]);
+		message = split[1];
+		counter++;
+	}
+	messageArray.push(message);
+	return messageArray;
+}
+function splitChunk(message, limit) {
+	var shortened = message.substring(0, limit)
+	if (shortened.indexOf("\n") > -1) shortened = shortened.substring(0, shortened.lastIndexOf("\n"));
+	else if (shortened.indexOf(". ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(". ")+1);
+	else if (shortened.indexOf(": ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(": ")+1);
+	else if (shortened.indexOf("; ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf("; ")+1);
+	else if (shortened.indexOf(", ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(", ")+1);
+	else if (shortened.indexOf(" ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(" "));
+	var remaining = message.substring(shortened.length, message.length);
+	shortened = shortened.trim().replace(/^\s+|\s+$/g, '').trim();
+	remaining = remaining.trim().replace(/^\s+|\s+$/g, '').trim();
+	return [shortened, remaining];
 }
 
 Randoms = {
