@@ -335,6 +335,8 @@ function sendAttachmentMessage(recipientId, attachment) {
 			url: attachment.url
 		}
 	}
+	console.log('messageAttachment');
+	console.log(messageAttachment);
   var messageData = {
     recipient: {
       id: recipientId
@@ -431,9 +433,7 @@ function intentConfidence(sender, message) {
     console.log("Confidence score " + confidence);
 
 		expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
-		console.log(expectAttachment);
 		const context = extractAllContext(data.entities);
-		console.log(context);
 
     if (intent != null) {
       switch(intent) {
