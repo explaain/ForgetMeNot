@@ -210,17 +210,18 @@ function prepareAndSendMessages(messageData, delay, endpoint) {
 	var d = Q.defer();
 	console.log(prepareAndSendMessages);
 	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
-	console.log('messageData');
-	console.log(messageData);
 	const messageDataArray = textArray.map(function(text) {
 		const data = JSON.parse(JSON.stringify(messageData));
 		if (text) data.message.text = text;
 		return data;
 	});
-	Q.spread([messageDataArray.map(function(message, i, array) {
-		return sendMessageAfterDelay(message, delay + i*2000, endpoint);
-	})], function(bodies) {
-		d.resolve(bodies);
+	Q.allSettled(
+		messageDataArray.map(function(message, i, array) {
+			return sendMessageAfterDelay(message, delay + i*2000, endpoint);
+		})
+	).then(function(results) {
+
+		d.resolve(results)
 	});
 	return d.promise;
 }
@@ -718,10 +719,8 @@ function saveMemory(sender, context, sentence, attachments) {
 		return searchDb(AlgoliaIndex, searchParams)
 	}).then(function() {
 		return attachments ? sendAttachmentUpload(sender, attachments[0].type, attachments[0].url) : Q.fcall(function() {return null});
-	}).then(function(bodies) {
-		console.log('bodies');
-		console.log(bodies);
-		if (attachments && bodies[0].attachment_id) memory.attachments[0].attachment_id = bodies[0].attachment_id;
+	}).then(function(results) {
+		if (attachments && results[0].value.attachment_id) memory.attachments[0].attachment_id = results[0].value.attachment_id;
 		return saveToDb(sender, memory)
 	}).then(function() {
 		memory.sentence = "I've now remembered that for you! " + memory.sentence;
