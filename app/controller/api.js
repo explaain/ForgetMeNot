@@ -1,4 +1,4 @@
-/* @TODO: See whether changing var d = Q.defer() to const is acceptable */
+/* @TODO: See whether changing const d = Q.defer() to const is acceptable */
 /* @TODO: See whether we can just return promises directly in functions */
 
 var request = require('request');
@@ -207,7 +207,7 @@ curl -X POST -H "Content-Type: application/json" -d '{
 */
 
 function prepareAndSendMessages(messageData, delay, endpoint) {
-	var d = Q.defer();
+	const d = Q.defer();
 	console.log(prepareAndSendMessages);
 	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
 	const messageDataArray = textArray.map(function(text) {
@@ -228,7 +228,7 @@ function prepareAndSendMessages(messageData, delay, endpoint) {
 
 function sendMessageAfterDelay(message, delay, endpoint) {
 	console.log(sendMessageAfterDelay);
-	var d = Q.defer();
+	const d = Q.defer();
 	if (!message.sender_action && delay > 0) sendSenderAction(sender, 'typing_on');
 	setTimeout(function() {
 		callSendAPI(message, endpoint)
@@ -243,20 +243,22 @@ function sendMessageAfterDelay(message, delay, endpoint) {
 
 /* being able to send the message */
 var callSendAPI = function(messageData, endpoint) {
-	var d = Q.defer();
+	const d = Q.defer();
 	if (messageData.message && !getContext(messageData.recipient.id, 'failing')) {
 		setContext(messageData.recipient.id, 'consecutiveFails', 0)
 	}
-	console.log(properties.facebook_message_endpoint);
 	const requestData = {
     uri: (endpoint || properties.facebook_message_endpoint),
     qs: { access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token) },
     method: 'POST',
     json: messageData
   };
+	console.log('\n\n');
+	console.log('--- Sending Message to Facebook ---');
 	console.log(requestData);
+	console.log('\n\n');
+	console.log(JSON.stringify(requestData));
   request(requestData, function (error, response, body) {
-  	console.log(requestData);
     if (!error && response.statusCode == 200) {
 			if (body.recipientId) {
 				console.log("Successfully sent message with id %s to recipient %s", body.messageId, body.recipientId);
@@ -335,7 +337,7 @@ function sendSenderAction(recipientId, sender_action) {
   prepareAndSendMessages(messageData);
 }
 function sendTextMessage(recipientId, messageText, delay) {
-	var d = Q.defer();
+	const d = Q.defer();
 	console.log(sendTextMessage);
 	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
 	messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
@@ -454,7 +456,11 @@ function intentConfidence(sender, message) {
 	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
   witClient.message(messageToWit, {})
   .then((data) => {
-    console.log('Wit response: ', JSON.stringify(data) + "\n");
+		console.log('\n\n');
+		console.log('--- Entities From wit ---');
+		console.log(data);
+		console.log('\n\n');
+		console.log(JSON.stringify(data));
     try {
       var intent = JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
     } catch(err) {
@@ -742,8 +748,8 @@ function conditionalPromise(condition, promise, optionalValue) {
 
 function getDbObject(index, objectID, returnArray) {
 	console.log(getDbObject);
-	var d = Q.defer();
-	index.getObject(sender, ['uploadTo'], function(err, content) {
+	const d = Q.defer();
+	index.getObject(objectID, returnArray, function(err, content) {
 		if (err) {
 			d.reject(err)
 		} else {
@@ -755,11 +761,21 @@ function getDbObject(index, objectID, returnArray) {
 
 function searchDb(index, params) {
 	console.log(searchDb);
-	var d = Q.defer();
+	const d = Q.defer();
+	console.log('\n\n');
+	console.log('--- Algolia Search Parameters ---');
+	console.log(params);
+	console.log('\n\n');
+	console.log(JSON.stringify(params));
 	index.search(params, function searchDone(err, content) { /* @TODO: investigate whether function name is needed */
 		if (err) {
 			d.reject(err)
 		} else {
+		console.log('\n\n');
+			console.log('--- Algolia Search Hits ---');
+			console.log(content.hits);
+			console.log('\n\n');
+			console.log(JSON.stringify(content.hits));
 			d.resolve(content);
 		}
 	});
@@ -768,7 +784,7 @@ function searchDb(index, params) {
 
 function saveToDb(sender, memory) {
 	console.log(saveToDb);
-	var d = Q.defer();
+	const d = Q.defer();
 	memory.dateCreated = Date.now();
 	AlgoliaIndex.addObject(memory, function(err, content){
 		if (err) {
@@ -788,6 +804,8 @@ function recallMemory(sender, context, attachments) {
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
 	return getDbObject(AlgoliaUsersIndex, sender, ['readAccess'])
 	.then(function(content) {
+		console.log('readAccessContent');
+		console.log(content);
 		const readAccessList = content.readAccess || [];
 		const userIdFilterString = 'userID: ' + sender + readAccessList.map(function(id) {return ' OR userID: '+id}).join('');
 		const searchParams = {
@@ -939,8 +957,10 @@ function extractAllContext(e) {
 		}
 	})
 
-	console.log('finalEntities');
+	console.log('\n\n');
+	console.log('--- Entities Now Prepared ---');
 	console.log(finalEntities);
+	console.log('\n\n');
 	console.log(JSON.stringify(finalEntities));
 	return finalEntities;
 }
