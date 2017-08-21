@@ -1,3 +1,5 @@
+/* @TODO: see whether changing var d = Q.defer() to const is acceptable */
+
 var request = require('request');
 var properties = require('../config/properties.js');
 var schedule = require('node-schedule');
@@ -19,12 +21,28 @@ const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
 const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
 
 const crypto = require("crypto");
+const Q = require("q");
 
 // user information global variable
 var first_name = "";
 var id = "";
 
-const Context = {};
+const C = {}; // C is for Context
+
+var getContext = function(sender, context) {
+	try {
+		return C[sender][context];
+	} catch(e) {
+		return null; //Probaby not safe!
+	}
+}
+var setContext = function(sender, context, value) {
+	try {
+		C[sender][context] = value;
+	} catch(e) {
+		//Probaby not safe!
+	}
+}
 
 // Wit AI
 var witClient = new Wit({
@@ -74,98 +92,87 @@ exports.fbInformation = function() {
 
 /* Recieve request */
 exports.handleMessage = function(req, res) {
+	console.log('handleMessage');
 	try {
 		messaging_events = req.body.entry[0].messaging;
 		postback = null;
-		for (i = 0; i < messaging_events.length; i++) {
-			event = req.body.entry[0].messaging[i];
-			console.log(JSON.stringify(event));
+		messaging_events.forEach(function(event) {
 			sender = event.sender.id;
-			if (!Context[sender]) Context[sender] = {
+			if (!C[sender]) C[sender] = {
 				lastResults: [],
-				consecutiveFails: 0
+				consecutiveFails: 0,
+				totalFailCount: 0
 			}
-			if (!Context[sender].totalFailCount) Context[sender].totalFailCount = 0;
-			Context[sender].failing = false;
-			sendSenderAction(sender, 'typing_on');
+			C[sender].failing = false;
+			sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 			try {
 				postback = event.postback.payload;
 			} catch (err) {}
-			if (postback == 'first_connection') {
+			if (postback == 'first_connection') { // Currently this doesn't work cos there's no button
 				fetchFacebookData(sender);
 				firstMessage(sender);
-			} else {
-				console.log(JSON.stringify(event.message));
-				if (event.message) {
-					if (event.message.text) {
-						text = event.message.text;
-						// Handle a text message from this sender
-						switch(text) {
-							case "begin":
+			} else if (event.message) {
+				console.log("Dealing with message");
+				if ((text = event.message.text)) {
+					// Handle a text message from this sender
+					switch(text) {
+						case "test":
+							sendTextMessage(sender, "Test reply!");
+							break;
+						case "begin":
 							firstMessage(sender);
 							break;
-							case "account":
+						case "account":
 							fetchFacebookData(sender);
 							break;
-							case "location":
+						case "location":
 							setTimeZone(sender)
 							break;
-							case "subscribe":
+						case "subscribe":
 							subscribeUser(sender)
 							break;
-							case "unsubscribe":
+						case "unsubscribe":
 							unsubscribeUser(sender)
 							break;
-							case "subscribestatus":
+						case "subscribestatus":
 							subscribeStatus(sender)
 							break;
-							case "test memory":
+						case "test memory":
 							newTimeBasedMemory(sender)
 							break;
-							case "set timezone":
+						case "set timezone":
 							setLocation(sender)
 							break;
-							case "whats my time zone":
+						case "whats my time zone":
 							userLocation(sender)
 							break;
-							case "test this":
+						case "test this":
 							updateUserLocation(sender, "Bristol")
 							break;
-							default: {
-								intentConfidence(sender, text);
-								//witResponse(sender, text);
-							}
+						default: {
+							intentConfidence(sender, text);
 						}
 					}
-					if (event.message.attachments) {
-						const attachmentType = event.message.attachments[0].type;
-						const attachmentUrl = attachmentType=='fallback' ? event.message.attachments[0].url : event.message.attachments[0].payload.url;
-
-						if (Context[sender].expectingAttachment) {
-							Context[sender].expectingAttachment.attachments = [
-								{
-									type: attachmentType,
-									url: attachmentUrl
-								}
-							];
-							saveMemory(Context[sender].expectingAttachment.userID, Context[sender].expectingAttachment.context, Context[sender].expectingAttachment.sentence, Context[sender].expectingAttachment.attachments);
-							delete Context[sender].expectingAttachment;
-						} else {
-							Context[sender].holdingAttachment = {
-								userID: sender,
-								type: attachmentType,
-								url: attachmentUrl
-							};
-							sendSenderAction(sender, 'typing_off');
-						}
-						console.log('expectingAttachment: ', expectingAttachment);
-						console.log('holdingAttachment: ', holdingAttachment);
+					delete C[sender].expectingAttachment;
+				} else if ((attachments = event.message.attachments)) {
+					const type = attachments[0].type;
+					const url = (type=='fallback') ? attachments[0].url : attachments[0].payload.url;
+					const attachment = {
+						type: type,
+						url: url
+					}
+					var memory;
+					if ((memory = C[sender].expectingAttachment)) {
+						saveMemory(memory.userID, memory.context, memory.sentence, [attachment]);
+						delete C[sender].expectingAttachment; // Could this be delete memory?
 					} else {
-						delete Context[sender].expectingAttachment;
+						C[sender].holdingAttachment = attachment;
+						C[sender].holdingAttachment.userID = sender;
+						sendSenderAction(sender, 'typing_off');
 					}
 				}
 			}
-		}
+		});
 	} catch(e) {
 		console.log('-- Error processing the webhook! --')
 		console.log(e)
@@ -198,76 +205,89 @@ curl -X POST -H "Content-Type: application/json" -d '{
 
 */
 
-function prepareAndSendMessages(messageData, alternativeEndpoint, memory) {
+function prepareAndSendMessages(messageData, delay, endpoint) {
+	var d = Q.defer();
+	console.log(prepareAndSendMessages);
 	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
+	console.log('messageData');
+	console.log(messageData);
 	const messageDataArray = textArray.map(function(text) {
 		const data = JSON.parse(JSON.stringify(messageData));
 		if (text) data.message.text = text;
 		return data;
-	})
-	messageDataArray.forEach(function(message, i, array) {
-		setTimeout(function() {
-			callSendAPI(message, alternativeEndpoint, memory);
-		}, 2000*i)
-		if (i<array.length-1) {
-			setTimeout(function() {
-				sendSenderAction(sender, 'typing_on');
-			}, 2100*i)
-		}
 	});
+	Q.spread([messageDataArray.map(function(message, i, array) {
+		return sendMessageAfterDelay(message, delay + i*2000, endpoint);
+	})], function(bodies) {
+		d.resolve(bodies);
+	});
+	return d.promise;
+}
+
+function sendMessageAfterDelay(message, delay, endpoint) {
+	console.log(sendMessageAfterDelay);
+	var d = Q.defer();
+	if (!message.sender_action && delay > 0) sendSenderAction(sender, 'typing_on');
+	setTimeout(function() {
+		callSendAPI(message, endpoint)
+		.then(function(body) {
+			d.resolve(body)
+		}).catch(function(err) {
+			d.reject(err)
+		});
+	}, delay);
+	return d.promise;
 }
 
 /* being able to send the message */
-function callSendAPI(messageData, alternativeEndpoint, memory) {
-	console.log('Context[sender].failing');
-	console.log(Context[sender].failing);
-	if (messageData.message && !Context[sender].failing) {
-		Context[sender].consecutiveFails = 0;
+var callSendAPI = function(messageData, endpoint) {
+	var d = Q.defer();
+	if (messageData.message && !getContext(messageData.recipient.id, 'failing')) {
+		setContext(messageData.recipient.id, 'consecutiveFails', 0)
 	}
-	console.log('Context[sender].consecutiveFails');
-	console.log(Context[sender].consecutiveFails);
-	console.log(messageData);
-  request({
-    uri: (alternativeEndpoint || properties.facebook_message_endpoint),
+	console.log(properties.facebook_message_endpoint);
+	const requestData = {
+    uri: (endpoint || properties.facebook_message_endpoint),
     qs: { access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token) },
     method: 'POST',
     json: messageData
-  }, function (error, response, body) {
-		console.log(response.statusCode);
+  };
+	console.log(requestData);
+  request(requestData, function (error, response, body) {
+  	console.log(requestData);
     if (!error && response.statusCode == 200) {
 			if (body.recipientId) {
-				var recipientId = body.recipient_id;
-				var messageId = body.message_id;
-				console.log("Successfully sent message with id %s to recipient %s",
-				messageId, recipientId);
+				console.log("Successfully sent message with id %s to recipient %s", body.messageId, body.recipientId);
 			} else if (body.attachment_id) {
-				console.log('body.attachment_id', body.attachment_id);
-				memory.attachments[0].attachment_id = body.attachment_id;
-				saveToDb(sender, memory);
+				console.log("Successfully saved attachment");
 			}
+			d.resolve(body);
     } else {
-      console.error("Unable to send message.");
-      //console.error(response);
-      console.error(error);
+      console.error("Unable to send message.", error);
+			d.reject(error);
     }
   });
+	return d.promise;
 }
 
 function receivedMessage(event) {
+	console.log(receivedMessage);
   // Putting a stub for now, we'll expand it in the following steps
   console.log("Message data: ", event.message);
 }
 
 function giveUp(sender) {
-	Context[sender].failing = true;
-	Context[sender].totalFailCount++;
-	console.log('Context[sender].totalFailCount');
-	console.log(Context[sender].totalFailCount);
-	if (Context[sender].consecutiveFails < 4) Context[sender].consecutiveFails++;
-	sendGenericMessage(sender, 'dunno', Context[sender].consecutiveFails);
+	console.log(giveUp);
+	C[sender].failing = true;
+	C[sender].totalFailCount++;
+	console.log('C[sender].totalFailCount');
+	console.log(C[sender].totalFailCount);
+	if (C[sender].consecutiveFails < 4) C[sender].consecutiveFails++;
+	sendGenericMessage(sender, 'dunno', C[sender].consecutiveFails);
 }
 
 function sendGenericMessage(recipientId, type, optionalCounter) {
+	console.log(sendGenericMessage);
   // Bot didnt know what to do with message from user
 	const text = optionalCounter ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
   var messageData = {
@@ -280,7 +300,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
   };
   prepareAndSendMessages(messageData);
 
-	if (Randoms.gifs[type] && (type!='dunno' || Context[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(Context[recipientId].totalFailCount/4))==0 )) {
+	if (Randoms.gifs[type] && (type!='dunno' || C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
 		const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
 		var messageData2 = {
 			recipient: {
@@ -301,7 +321,9 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
 }
 
 /* function sends message back to user */
+
 function sendSenderAction(recipientId, sender_action) {
+	console.log(sendSenderAction);
   var messageData = {
     recipient: {
       id: recipientId
@@ -310,9 +332,11 @@ function sendSenderAction(recipientId, sender_action) {
   };
   prepareAndSendMessages(messageData);
 }
-function sendTextMessage(recipientId, messageText) {
+function sendTextMessage(recipientId, messageText, delay) {
+	var d = Q.defer();
+	console.log(sendTextMessage);
 	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
-	messageText = messageText.replace(/"/g, '').replace(/'/g, '').replace(/\//g, '').replace(/‘/g, '').replace(/’/g, '').replace(/’/g, '');
+	messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
   var messageData = {
     recipient: {
       id: recipientId
@@ -321,9 +345,14 @@ function sendTextMessage(recipientId, messageText) {
       text: messageText
     }
   };
-  prepareAndSendMessages(messageData);
+  prepareAndSendMessages(messageData, delay)
+	.then(function() {
+		d.resolve();
+	})
+	return d.promise
 }
 function sendAttachmentMessage(recipientId, attachment) {
+	console.log(sendAttachmentMessage);
 	const messageAttachment = attachment.attachment_id ? {
 		type: attachment.type,
 		payload: {
@@ -335,8 +364,6 @@ function sendAttachmentMessage(recipientId, attachment) {
 			url: attachment.url
 		}
 	}
-	console.log('messageAttachment');
-	console.log(messageAttachment);
   var messageData = {
     recipient: {
       id: recipientId
@@ -347,7 +374,8 @@ function sendAttachmentMessage(recipientId, attachment) {
   };
   prepareAndSendMessages(messageData);
 }
-function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl, memory) {
+function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
+	console.log(sendAttachmentUpload);
   var messageData = {
     recipient: {
       id: recipientId
@@ -362,11 +390,12 @@ function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl, memory
 	    }
     }
   };
-  prepareAndSendMessages(messageData, properties.facebook_message_attachments_endpoint, memory);
+  return prepareAndSendMessages(messageData, 0, properties.facebook_message_attachments_endpoint); /* @TODO: will this work? */
 }
 
 function firstMessage(recipientId) {
-	Context[sender].onboarding = true;
+	console.log(firstMessage);
+	C[sender].onboarding = true;
 
   var messageData = {
     recipient: {
@@ -392,6 +421,7 @@ function firstMessage(recipientId) {
 }
 
 function fetchFacebookData(recipientId) {
+	console.log(fetchFacebookData);
   console.log("inside the request");
 	console.log(properties.facebook_user_endpoint + recipientId + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token));
   request({
@@ -408,79 +438,51 @@ function fetchFacebookData(recipientId) {
 // ------------Wit Code Below--------------- //
 // fetch wits response
 function witResponse(recipientId, message) {
+	console.log(witResponse);
   witClient.runActions(recipientId, message, {})
   .then((data) => {
     //console.log(JSON.stringify(data));
-  })
-  .catch(console.error);
+  }).catch(function(err) {
+		console.log(err);
+	}).done();
 }
 
-// check wit.ai's confidence for the intent
 function intentConfidence(sender, message) {
-  var intent = null;
+	console.log(intentConfidence);
 	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
   witClient.message(messageToWit, {})
   .then((data) => {
     console.log('Wit response: ', JSON.stringify(data) + "\n");
     try {
-      intent = JSON.stringify(data.entities.intent[0].value);
-      intent = intent.replace(/"/g, '');
-      var confidence = JSON.stringify(data.entities.intent[0].confidence);
+      var intent = JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
     }
-    console.log("Confidence score " + confidence);
-
-		expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
+		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
 		const context = extractAllContext(data.entities);
-
-    if (intent != null) {
+    if (intent) {
       switch(intent) {
-				case "greeting":
-					sendGenericMessage(sender, 'greeting');
-					break;
-				case "thanks":
-					sendGenericMessage(sender, 'thanks');
-					break;
-				case "humour":
-					sendGenericMessage(sender, 'humour');
-					break;
-				case "bye":
-					sendGenericMessage(sender, 'bye');
-					break;
-				case "pleasure":
-					sendGenericMessage(sender, 'pleasure');
-					break;
-				case "dissatisfaction":
-					sendGenericMessage(sender, 'dissatisfaction');
-					break;
 				case "nextResult":
 					tryAnotherMemory(sender);
 					break;
         case "storeMemory":
-					console.log('storeMemory');
           try {
             var sentence = rewriteSentence(message);
-            console.log(context, sentence);
-            if (context != null && sentence != null) {
-							if (expectAttachment) {
-								sentence+=" ⬇️";
-								if (Context[sender].holdingAttachment) {
-									saveMemory(sender, context, sentence, [Context[sender].holdingAttachment]);
-									delete Context[sender].holdingAttachment;
-								} else {
-									Context[sender].expectingAttachment = {userID: sender, context: context, sentence: sentence};
-									sendSenderAction(sender, 'typing_off');
-								}
+						if (expectAttachment) {
+							sentence+=" ⬇️";
+							if (C[sender].holdingAttachment) {
+								saveMemory(sender, context, sentence, [C[sender].holdingAttachment]);
+								delete C[sender].holdingAttachment;
 							} else {
-								console.log("Trying to process reminder \n");
-								saveMemory(sender, context, sentence); // New Context-Sentence method
-								delete Context[sender].holdingAttachment;
+								C[sender].expectingAttachment = {userID: sender, context: context, sentence: sentence};
+								sendSenderAction(sender, 'typing_off');
 							}
-            } else {
-              console.log("I'm sorry but this couldn't be processed. \n");
-            }
+						} else {
+							console.log("Trying to process reminder \n");
+							saveMemory(sender, context, sentence); // New Context-Sentence method
+							delete C[sender].holdingAttachment;
+						}
           } catch (err) {
             giveUp(sender);
           }
@@ -489,37 +491,33 @@ function intentConfidence(sender, message) {
         case "recall":
           console.log("this is a recall");
           try {
-            console.log(context);
-            if (context != null) {
-              recallMemory(sender, context);
-            } else {
-              console.log("I'm sorry but this couldn't be processed. \n");
-            }
+            recallMemory(sender, context);
           } catch (err) {
             giveUp(sender);
           }
           break;
 
-				case "setTask":
+				case "setTask": // Need to convert this to Random Text/GIFs
 					sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!");
 					sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
 					break;
 
         default:
-					giveUp(sender);
-
-          // witResponse(sender, text);
+					sendGenericMessage(sender, intent);
           break;
 
       }
     }
-  }).catch(console.error);
+  }).catch(function(err) {
+		console.log(err);
+	});
 }
 // -------------------------------------------- //
 
 // ------------User Code Below---------------- //
 /* Save a user to the database */
 function subscribeUser(id) {
+	console.log(subscribeUser);
   var newUser = new user({
     fb_id: id,
     location: "placeholder"
@@ -539,6 +537,7 @@ function subscribeUser(id) {
 
 /* remove user from database */
 function unsubscribeUser(id) {
+	console.log(unsubscribeUser);
   // built in remove method to remove user from db
   user.findOneAndRemove({fb_id: id}, function(err, user) {
     if (err) {
@@ -552,6 +551,7 @@ function unsubscribeUser(id) {
 
 /* subscribed status */
 function subscribeStatus(id) {
+	console.log(subscribeStatus);
   user.findOne({fb_id: id}, function(err, user) {
     subscribeStatus = false;
     if (err) {
@@ -567,6 +567,7 @@ function subscribeStatus(id) {
 
 /* find the users location from the db */
 function userLocation(id) {
+	console.log(userLocation);
   user.findOne({fb_id: id}, function(err, user) {
     location = "";
     if (err) {
@@ -582,6 +583,7 @@ function userLocation(id) {
 }
 
 function updateUserLocation(id, newLocation) {
+	console.log(updateUserLocation);
   user.findOneAndUpdate({fb_id: id}, {location: newLocation}, function(err, user) {
     if (err) {
       console.log(err);
@@ -596,6 +598,7 @@ function updateUserLocation(id, newLocation) {
 }
 
 function createUserAccount(userData) {
+	console.log(createUserAccount);
 	// Generate the value to be used for the Secure API key
 	const searchOnlyApiKey = userData.id + '_' + crypto.randomBytes(12).toString('hex');
 
@@ -618,6 +621,7 @@ function createUserAccount(userData) {
 
 // -----------User Memory Code Below--------------- //
 function newTimeBasedMemory(id) {
+	console.log(newTimeBasedMemory);
   var newTimeMemory = new timeMemory({
     fb_id: id,
     subject: "WiFi",
@@ -637,6 +641,7 @@ function newTimeBasedMemory(id) {
 }
 
 function returnTimeMemory(id) {
+	console.log(returnTimeMemory);
   timeMemory.findOne({fb_id: id}, function(err, memory) {
     if (err) {
       console.log(err);
@@ -654,6 +659,7 @@ function returnTimeMemory(id) {
 
 // -----------User Key Value Reminder Code Below--------------- //
 function newKeyValue(id, subject, value) {
+	console.log(newKeyValue);
   var amendKeyValue = new keyValue({
     fb_id: id,
     subject: subject,
@@ -673,6 +679,7 @@ function newKeyValue(id, subject, value) {
 }
 
 function returnKeyValue(id, subject) {
+	console.log(returnKeyValue);
   keyValue.find({fb_id: id, subject: subject}, function(err, memory) {
     if (err) {
       console.log(err);
@@ -692,128 +699,142 @@ function returnKeyValue(id, subject) {
 
 // ----------Context-Value-Sentence Method------------- //
 function saveMemory(sender, context, sentence, attachments) {
-  //Should first check whether a record with this Context-Value-Sentence combination already exists
-
-
-	AlgoliaUsersIndex.getObject(sender, ['uploadTo'], function(err, content) {
-		console.log('content');
-		console.log(content);
-		const uploadTo = content ? content.uploadTo || sender : sender;
-
-	  const memory = {userID: uploadTo, context: context, sentence: sentence, attachments: attachments, hasAttachments: !!(attachments)};
-		//Check whether it looks too similar to an existing one (for now using whatever memory bank you're uploading to)
-		const messageToAlgolia = sentence.substring(0, 500); // Only sends Algolia the first 511 characters as it can't handle more than that
-		AlgoliaIndex.search({
-			query: messageToAlgolia,
-			filters: 'userID: ' + uploadTo,
+	console.log(saveMemory);
+	const memory = {
+		context: context,
+		sentence: sentence,
+		attachments: attachments,
+		hasAttachments: !!(attachments) /* @TODO: investigate whether brackets are needed */
+	};
+	return getDbObject(AlgoliaUsersIndex, sender, ['uploadTo'])
+	.then(function(content) {
+		memory.userID = content ? content.uploadTo || sender : sender;
+		const searchParams = {
+			query: sentence.substring(0, 500), // Only sends Algolia the first 511 characters as it can't handle more than that
+			filters: 'userID: ' + memory.userID,
 			getRankingInfo: true
-		},
-		function searchDone(err, content) {
-			if (err) {
-				console.log(err);
-			}
-			console.log(content);
-			content.hits.forEach(function(h) {
-				console.log(h._rankingInfo);
-			})
+		};
+		return searchDb(AlgoliaIndex, searchParams)
+	}).then(function() {
+		return attachments ? sendAttachmentUpload(sender, attachments[0].type, attachments[0].url) : Q.fcall(function() {return null});
+	}).then(function(bodies) {
+		console.log('bodies');
+		console.log(bodies);
+		if (attachments && bodies[0].attachment_id) memory.attachments[0].attachment_id = bodies[0].attachment_id;
+		return saveToDb(sender, memory)
+	}).then(function() {
+		memory.sentence = "I've now remembered that for you! " + memory.sentence;
+		return sendResult(sender, memory)
+	}).then(function() {
+		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"", 1500) : Q.fcall(function() {return null});
+	}).catch(function(err) {
+		console.log(err);
+	}).done(); /* @TODO: investigate whether done is appropriate here */
+}
 
-			if (attachments) {
-				sendAttachmentUpload(sender, attachments[0].type, attachments[0].url, memory)
-			} else {
-				saveToDb(sender, memory);
-			}
-		});
-  });
+// NO LONGER NEEDED?
+function conditionalPromise(condition, promise, optionalValue) {
+	console.log(conditionalPromise);
+	if (condition) {
+		return promise
+	} else {
+		return Q.fcall(function() {return optionalValue})
+	}
+}
+
+function getDbObject(index, objectID, returnArray) {
+	console.log(getDbObject);
+	var d = Q.defer();
+	index.getObject(sender, ['uploadTo'], function(err, content) {
+		if (err) {
+			d.reject(err)
+		} else {
+			d.resolve(content);
+		}
+	});
+	return d.promise;
+}
+
+function searchDb(index, params) {
+	console.log(searchDb);
+	var d = Q.defer();
+	index.search(params, function searchDone(err, content) { /* @TODO: investigate whether function name is needed */
+		if (err) {
+			d.reject(err)
+		} else {
+			d.resolve(content);
+		}
+	});
+	return d.promise;
 }
 
 function saveToDb(sender, memory) {
+	console.log(saveToDb);
+	var d = Q.defer();
 	AlgoliaIndex.addObject(memory, function(err, content){
 		if (err) {
 			sendTextMessage(id, "I couldn't remember that");
+			d.reject();
 		} else {
-			console.log('User memory successfully!');
-			sendTextMessage(sender, "I've now remembered that for you! " + memory.sentence);
-
-			if (memory.attachments) {
-				setTimeout(function() {
-					sendAttachmentMessage(sender, memory.attachments[0])
-				}, 500)
-			}
-			if (Context[sender].onboarding) {
-				setTimeout(function() {
-					sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"");
-				}, 1500)
-			}
+			console.log('User memory saved successfully!');
+			d.resolve();
 		}
 	});
+	return d.promise;
 }
 
 
 function recallMemory(sender, context, attachments) {
-  console.log('Searching Algolia.....');
+	console.log(recallMemory);
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
-	console.log('searchTerm: ', searchTerm);
-	AlgoliaUsersIndex.getObject(sender, ['readAccess'], function(err, content) {
-		console.log('content');
-		console.log(content);
+	return getDbObject(AlgoliaUsersIndex, sender, ['readAccess'])
+	.then(function(content) {
 		const readAccessList = content.readAccess || [];
-		const userIdFilterString = 'userID: ' + sender + readAccessList.map(function(id) {
-			return ' OR userID: ' + id
-		}).join('');
-		console.log(userIdFilterString);
-		const messageToAlgolia = searchTerm.substring(0, 511); // Only sends Algolia the first 511 characters as it can't handle more than that
-		AlgoliaIndex.search({
-			query: messageToAlgolia,
+		const userIdFilterString = 'userID: ' + sender + readAccessList.map(function(id) {return ' OR userID: '+id}).join('');
+		const searchParams = {
+			query: sentence.substring(0, 500), // Only sends Algolia the first 511 characters as it can't handle more than that
 			filters: userIdFilterString
-			// filters: 'sentence: "This is your pal."'
-			// filters: 'hasAttachments: true'
 			// filters: (attachments ? 'hasAttachments: true' : '')
-		},
-		function searchDone(err, content) { // Middle parameter may not be necessary
-			if (err) {
-				console.log(err);
-			}
-
-			console.log(content);
-
-			if (content.hits.length) {
-				Context[sender].lastResults = content.hits;
-				Context[sender].lastResultTried = 0;
-				memory = content.hits[0]; // Assumes first result is only option
-				sendResult(sender, memory);
-			} else {
-				sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
-			}
-
-			if (Context[sender].onboarding) {
-				setTimeout(function() {
-					sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮");
-					setTimeout(function() {
-						sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...");
-						Context[sender].onboarding = false;
-					}, 3000)
-				}, 1500)
-			}
-		});
-	});
+		};
+		return searchDb(AlgoliaIndex, searchParams)
+	}).then(function() {
+		if (content.hits.length) {
+			C[sender].lastResults = content.hits;
+			C[sender].lastResultTried = 0;
+			return sendResult(sender, content.hits[0]);
+		} else {
+			return sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
+		}
+	}).then(function() {
+		return C[sender].onboarding ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500) : Q.fcall(function() {return null});
+	}).then(function() {
+		return C[sender].onboarding ? sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...", 1500) : Q.fcall(function() {return null});
+	}).catch(function(err) {
+		console.log(err);
+	}).done();
 }
 
 function sendResult(sender, memory) {
-	var returnValue = memory.sentence;
+	console.log(sendResult);
+	var sentence = memory.sentence;
 	if (memory.attachments) {
-		if (~[".","!","?",";"].indexOf(returnValue[returnValue.length-1])) returnValue = returnValue.substring(0, returnValue.length - 1);;
-		returnValue+=" ⬇️";
-		setTimeout(function() {
-			sendAttachmentMessage(sender, memory.attachments[0])
-		}, 500)
+		if (~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence = sentence.substring(0, sentence.length - 1);;
+		sentence+=" ⬇️";
 	}
-	sendTextMessage(sender, returnValue);
+	return sendTextMessage(sender, sentence)
+	.then(function() {
+		return memory.attachments ? sendAttachmentMessage(sender, memory.attachments[0]) : Q.fcall(function() {return null});
+	})
+	.catch(function(err) {
+		console.log(err);
+	}).done();
 }
 
 function tryAnotherMemory(sender) {
-	const memory = Context[sender].lastResults[Context[sender].lastResultTried+1];
+	console.log(tryAnotherMemory);
+	const memory = C[sender].lastResults[C[sender].lastResultTried+1];
 	sendResult(sender, memory);
-	Context[sender].lastResultTried++;
+	C[sender].lastResultTried++;
 }
 // -------------------------------------------- //
 
@@ -824,6 +845,7 @@ function tryAnotherMemory(sender) {
 // -----------Google API Code Below--------------- //
 /* query geolocation */
 function setTimeZone(sender) {
+	console.log(setTimeZone);
   // Fetch timezone from lat & long.
   googleMapsClient.timezone({
       location: [-33.8571965, 151.2151398],
@@ -839,6 +861,7 @@ function setTimeZone(sender) {
 
 /* set the location for a user */
 function setLocation(sender) {
+	console.log(setLocation);
   var count = 0;
   // Fetch location
   googleMapsClient.geocode({
@@ -860,6 +883,7 @@ function setLocation(sender) {
 
 
 function rewriteSentence(sentence) { // Currently very primitive!
+	console.log(rewriteSentence);
   const remember = [
     /^Remember that/,
 		/^remember that/,
@@ -886,6 +910,7 @@ function rewriteSentence(sentence) { // Currently very primitive!
 
 
 function extractAllContext(e) {
+	console.log(extractAllContext);
 	const entities = e; // Hopefully this avoids deleting/editing things in the original entities object outside this function!
 	var contextArray = [];
 	if (entities.intent) delete entities.intent;
@@ -906,6 +931,7 @@ function extractAllContext(e) {
 }
 
 function longMessageToArrayOfMessages(message, limit) { // limit is in characters
+	console.log(longMessageToArrayOfMessages);
 	var counter = 0;
 	var messageArray = [];
 	while (message.length > limit && counter < 30) { // Once confident this loop won't be infinite we can remove the counter
@@ -918,6 +944,7 @@ function longMessageToArrayOfMessages(message, limit) { // limit is in character
 	return messageArray;
 }
 function splitChunk(message, limit) {
+	console.log(splitChunk);
 	var shortened = message.substring(0, limit)
 	if (shortened.indexOf("\n") > -1) shortened = shortened.substring(0, shortened.lastIndexOf("\n"));
 	else if (shortened.indexOf(". ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(". ")+1);
@@ -930,6 +957,17 @@ function splitChunk(message, limit) {
 	remaining = remaining.trim().replace(/^\s+|\s+$/g, '').trim();
 	return [shortened, remaining];
 }
+
+
+
+
+exports.setContext = setContext;
+exports.getContext = getContext;
+exports.callSendAPI = callSendAPI;
+
+
+
+
 
 Randoms = {
 	texts: {},
