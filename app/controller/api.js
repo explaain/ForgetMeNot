@@ -1,4 +1,5 @@
-/* @TODO: see whether changing var d = Q.defer() to const is acceptable */
+/* @TODO: See whether changing var d = Q.defer() to const is acceptable */
+/* @TODO: See whether we can just return promises directly in functions */
 
 var request = require('request');
 var properties = require('../config/properties.js');
@@ -792,12 +793,12 @@ function recallMemory(sender, context, attachments) {
 		const readAccessList = content.readAccess || [];
 		const userIdFilterString = 'userID: ' + sender + readAccessList.map(function(id) {return ' OR userID: '+id}).join('');
 		const searchParams = {
-			query: sentence.substring(0, 500), // Only sends Algolia the first 511 characters as it can't handle more than that
+			query: searchTerm.substring(0, 500), // Only sends Algolia the first 511 characters as it can't handle more than that
 			filters: userIdFilterString
 			// filters: (attachments ? 'hasAttachments: true' : '')
 		};
 		return searchDb(AlgoliaIndex, searchParams)
-	}).then(function() {
+	}).then(function(content) {
 		if (content.hits.length) {
 			C[sender].lastResults = content.hits;
 			C[sender].lastResultTried = 0;
