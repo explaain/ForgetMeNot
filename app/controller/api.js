@@ -495,8 +495,9 @@ function intentConfidence(sender, message) {
         case "recall":
           console.log("this is a recall");
           try {
-            recallMemory(sender, context);
+            recallMemory(sender, memory.context);
           } catch (err) {
+						console.log(err);
             giveUp(sender);
           }
           break;
@@ -768,6 +769,7 @@ function searchDb(index, params) {
 function saveToDb(sender, memory) {
 	console.log(saveToDb);
 	var d = Q.defer();
+	memory.dateCreated = Date.now();
 	AlgoliaIndex.addObject(memory, function(err, content){
 		if (err) {
 			sendTextMessage(id, "I couldn't remember that");
