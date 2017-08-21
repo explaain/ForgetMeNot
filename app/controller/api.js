@@ -164,7 +164,7 @@ exports.handleMessage = function(req, res) {
 					}
 					var memory;
 					if ((memory = C[sender].expectingAttachment)) {
-						saveMemory(memory.userID, memory.context, memory.sentence, [attachment]);
+						saveMemory(sender, memory);
 						delete C[sender].expectingAttachment; // Could this be delete memory?
 					} else {
 						C[sender].holdingAttachment = attachment;
@@ -462,7 +462,8 @@ function intentConfidence(sender, message) {
 			giveUp(sender);
     }
 		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
-		const context = extractAllContext(data.entities);
+		const memory = extractAllContext(data.entities);
+		memory.sender = sender;
     if (intent) {
       switch(intent) {
 				case "nextResult":
@@ -470,11 +471,12 @@ function intentConfidence(sender, message) {
 					break;
         case "storeMemory":
           try {
-            var sentence = rewriteSentence(message);
+            memory.sentence = rewriteSentence(message);
 						if (expectAttachment) {
-							sentence+=" ⬇️";
+							memory.sentence+=" ⬇️";
 							if (C[sender].holdingAttachment) {
-								saveMemory(sender, context, sentence, [C[sender].holdingAttachment]);
+								memory.attachments = [C[sender].holdingAttachment];
+								saveMemory(sender, memory);
 								delete C[sender].holdingAttachment;
 							} else {
 								C[sender].expectingAttachment = {userID: sender, context: context, sentence: sentence};
@@ -482,7 +484,7 @@ function intentConfidence(sender, message) {
 							}
 						} else {
 							console.log("Trying to process reminder \n");
-							saveMemory(sender, context, sentence); // New Context-Sentence method
+							saveMemory(sender, memory); // New Context-Sentence method
 							delete C[sender].holdingAttachment;
 						}
           } catch (err) {
@@ -700,31 +702,26 @@ function returnKeyValue(id, subject) {
 
 
 // ----------Context-Value-Sentence Method------------- //
-function saveMemory(sender, context, sentence, attachments) {
+function saveMemory(sender, m) {
 	console.log(saveMemory);
-	const memory = {
-		context: context,
-		sentence: sentence,
-		attachments: attachments,
-		hasAttachments: !!(attachments) /* @TODO: investigate whether brackets are needed */
-	};
+	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
 	return getDbObject(AlgoliaUsersIndex, sender, ['uploadTo'])
 	.then(function(content) {
-		memory.userID = content ? content.uploadTo || sender : sender;
+		m.userID = content ? content.uploadTo || sender : sender;
 		const searchParams = {
-			query: sentence.substring(0, 500), // Only sends Algolia the first 511 characters as it can't handle more than that
-			filters: 'userID: ' + memory.userID,
+			query: m.sentence.substring(0, 500), // Only sends Algolia the first 511 characters as it can't handle more than that
+			filters: 'userID: ' + m.userID,
 			getRankingInfo: true
 		};
 		return searchDb(AlgoliaIndex, searchParams)
 	}).then(function() {
-		return attachments ? sendAttachmentUpload(sender, attachments[0].type, attachments[0].url) : Q.fcall(function() {return null});
+		return m.hasAttachments ? sendAttachmentUpload(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
 	}).then(function(results) {
-		if (attachments && results[0].value.attachment_id) memory.attachments[0].attachment_id = results[0].value.attachment_id;
-		return saveToDb(sender, memory)
+		if (m.hasAttachments && results[0].value.attachment_id) m.attachments[0].attachment_id = results[0].value.attachment_id;
+		return saveToDb(sender, m)
 	}).then(function() {
-		memory.sentence = "I've now remembered that for you! " + memory.sentence;
-		return sendResult(sender, memory)
+		m.sentence = "I've now remembered that for you! " + m.sentence;
+		return sendResult(sender, m)
 	}).then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"", 1500) : Q.fcall(function() {return null});
 	}).catch(function(err) {
@@ -908,26 +905,42 @@ function rewriteSentence(sentence) { // Currently very primitive!
   return sentence;
 }
 
-
+/* Now returns both context and all the other bits (except intent) */
 function extractAllContext(e) {
 	console.log(extractAllContext);
-	const entities = e; // Hopefully this avoids deleting/editing things in the original entities object outside this function!
-	var contextArray = [];
+	const entities = JSON.parse(JSON.stringify(e)); // Hopefully this avoids deleting/editing things in the original entities object outside this function!
+	const finalEntities = {
+		context: []
+	};
 	if (entities.intent) delete entities.intent;
 	const names1 = Object.keys(entities);
+	const nonContext = [
+		'act',
+		'assignment',
+		'security',
+		'expectAttachment',
+	];
 	names1.forEach(function(name1) {
-		entities[name1].forEach(function(entity) {
-			if (entity.entities) {
-				const names2 = Object.keys(entity.entities);
-				names2.forEach(function(name2) {
-					contextArray = contextArray.concat(entity.entities[name2])
-				});
-				delete entity.entities;
-			}
-			contextArray.push(entity);
-		})
+		if (nonContext.indexOf(name1) == -1) { // Only proceeds for context-like entities
+			entities[name1].forEach(function(entity) {
+				if (entity.entities) {
+					const names2 = Object.keys(entity.entities);
+					names2.forEach(function(name2) {
+						finalEntities.context = finalEntities.context.concat(entity.entities[name2])
+					});
+					delete entity.entities;
+				}
+				finalEntities.context.push(entity);
+			})
+		} else {
+			finalEntities[name1] = entities[name1]
+		}
 	})
-	return contextArray;
+
+	console.log('finalEntities');
+	console.log(finalEntities);
+	console.log(JSON.stringify(finalEntities));
+	return finalEntities;
 }
 
 function longMessageToArrayOfMessages(message, limit) { // limit is in characters
