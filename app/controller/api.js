@@ -381,7 +381,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
   };
   prepareAndSendMessages(messageData);
 
-	if (Randoms.gifs[type] && (type!='dunno' || C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
+	if (Randoms.gifs[type] && (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
 		const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
 		var messageData2 = {
 			recipient: {
@@ -918,6 +918,7 @@ function saveToDb(sender, memory) {
 function recallMemory(sender, context, attachments) {
 	console.log(recallMemory);
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
+	//@TODO: Add in check and create new user if none there
 	return getDbObject(AlgoliaUsersIndex, sender, ['readAccess'])
 	.then(function(content) {
 		console.log('readAccessContent');
@@ -1019,13 +1020,15 @@ function setLocation(sender) {
 
 function rewriteSentence(sentence) { // Currently very primitive!
 	console.log(rewriteSentence);
+	sentence = sentence.trim();
   const remove = [
-    /^Remember that/,
-		/^remember that/,
-    /^Remember/,
-    /^remember/,
-    /^Remind me/,
-    /^remind me/,
+    /^Remember that/i,
+    /^Remember/i,
+    /^Remind me/i,
+    /^Please/i,
+		/please\.^/i,
+    /please^/i,
+
   ];
 	remove.forEach(function(r) {
 		sentence = sentence.replace(r, '');
@@ -1061,6 +1064,7 @@ function extractAllContext(e) {
 		'assignment',
 		'security',
 		'expectAttachment',
+		'unimportant',
 	];
 	names1.forEach(function(name1) {
 		if (nonContext.indexOf(name1) == -1) { // Only proceeds for context-like entities
@@ -1229,4 +1233,12 @@ Randoms.gifs.dissatisfaction = [
 	'https://media.giphy.com/media/gnJgBlPgHtcnS/giphy.gif',
   'https://media.giphy.com/media/26AHLspJScv2J6P0k/giphy.gif',
   'https://media.giphy.com/media/4TELhlB0hYTC/giphy.gif',
+];
+
+Randoms.texts.affirmation = [
+	'Cool!',
+];
+
+Randoms.texts.helpRequest = [
+	'Request for help noted! We\'ll get someone to look at your request as soon as we can.',
 ];
