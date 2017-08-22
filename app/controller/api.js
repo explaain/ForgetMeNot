@@ -1,4 +1,3 @@
-/* @TODO: See whether changing const d = Q.defer() to const is acceptable */
 /* @TODO: See whether we can just return promises directly in functions */
 
 var request = require('request');
@@ -30,6 +29,9 @@ var id = "";
 
 const C = {}; // C is for Context
 
+
+
+
 var getContext = function(sender, context) {
 	try {
 		return C[sender][context];
@@ -44,6 +46,21 @@ var setContext = function(sender, context, value) {
 		//Probaby not safe!
 	}
 }
+
+
+var requestPromise = function(params) {
+	var d = Q.defer();
+	request(params, function (error, response) {
+		if (error) {
+			d.reject(error)
+		} else {
+			d.resolve(response)
+		}
+	});
+	return d.promise
+}
+
+
 
 // Wit AI
 var witClient = new Wit({
@@ -86,6 +103,61 @@ exports.tokenVerification = function(req, res) {
   }
 }
 
+
+var setupGetStartedButton = function() {
+	const d = Q.defer();
+	// Check whether button exists
+	const check = {
+    uri: properties.facebook_profile_endpoint,
+    qs: {
+			fields: 'get_started',
+			access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token)
+		},
+    method: 'GET'
+  };
+
+	// request(check, function (error, response, body) {
+	// 	if (error) {
+	// 		console.log(error);
+	// 		d.reject(error)
+	// 	} else {
+	// 		console.log(body);
+	// 		d.resolve(response, body)
+	// 	}
+	// });
+
+	requestPromise(check)
+	.then(function(response) {
+		const body = response.body;
+		console.log(body);
+    if (response.statusCode == 200 && (!body.data || body.data.length == 0)) {
+			const create = {
+		    uri: properties.facebook_profile_endpoint,
+		    qs: {
+					access_token: (process.env.FACEBOOK_TOKEN || properties.facebook_token)
+				},
+		    method: 'POST',
+				json: {
+				  "get_started": {
+				    "payload": properties.facebook_get_started_payload
+					}
+			  }
+		  };
+			return requestPromise(create)
+    } else {
+			throw new Error("Unable to read get started code.");
+    }
+	}).then(function(response) {
+		console.log(response.body);
+  }).catch(function(e) {
+		console.error("Unable to proceed", e);
+		d.reject(error);
+	});
+	return d.promise
+}
+
+setupGetStartedButton();
+
 /* Get user information */
 exports.fbInformation = function() {
 
@@ -109,7 +181,7 @@ exports.handleMessage = function(req, res) {
 			try {
 				postback = event.postback.payload;
 			} catch (err) {}
-			if (postback == 'first_connection') { // Currently this doesn't work cos there's no button
+			if (postback == 'GET_STARTED_PAYLOAD') {
 				fetchFacebookData(sender);
 				firstMessage(sender);
 			} else if (event.message) {
@@ -418,7 +490,7 @@ function firstMessage(recipientId) {
 			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍");
 			setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 			setTimeout(function() {
-				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \"My secret superpower is invisibility\"");
+				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility");
 			}, 6000);
 		}, 4000);
 	}, 1000);
@@ -730,7 +802,7 @@ function saveMemory(sender, m) {
 		m.sentence = "I've now remembered that for you! " + m.sentence;
 		return sendResult(sender, m)
 	}).then(function() {
-		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing \"What\'s my secret superpower?\"", 1500) : Q.fcall(function() {return null});
+		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500) : Q.fcall(function() {return null});
 	}).catch(function(err) {
 		console.log(err);
 	}).done(); /* @TODO: investigate whether done is appropriate here */
@@ -773,9 +845,11 @@ function searchDb(index, params) {
 		} else {
 		console.log('\n\n');
 			console.log('--- Algolia Search Hits ---');
-			console.log(content.hits);
+			console.log(content.hits.map(function(hit) {
+				return hit.sentence
+			}));
 			console.log('\n\n');
-			console.log(JSON.stringify(content.hits));
+			// console.log(JSON.stringify(content.hits));
 			d.resolve(content);
 		}
 	});
@@ -901,7 +975,7 @@ function setLocation(sender) {
 
 function rewriteSentence(sentence) { // Currently very primitive!
 	console.log(rewriteSentence);
-  const remember = [
+  const remove = [
     /^Remember that/,
 		/^remember that/,
     /^Remember/,
@@ -909,15 +983,19 @@ function rewriteSentence(sentence) { // Currently very primitive!
     /^Remind me/,
     /^remind me/,
   ];
-	remember.forEach(function(r) {
+	remove.forEach(function(r) {
 		sentence = sentence.replace(r, '');
 	});
-  const my = [
-    'My ',
-    'my '
+  const replace = [
+    [/\bme\b/i, 'you'],
+    [/\bmy\b/i, 'your'],
+    [/\bI\'m\b/i, 'you\'re'],
+    [/\bIm\b/i, 'you\'re'],
+    [/\bI am\b/i, 'you are'],
+    [/\bI\b/i, 'you'],
   ];
-  my.forEach(function(m) {
-    sentence = sentence.replace(m, 'your ');
+  replace.forEach(function(r) {
+    sentence = sentence.replace(r[0], r[1]);
   });
   sentence = sentence.trim();
 	sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1)
@@ -992,8 +1070,6 @@ function splitChunk(message, limit) {
 	remaining = remaining.trim().replace(/^\s+|\s+$/g, '').trim();
 	return [shortened, remaining];
 }
-
-
 
 
 exports.setContext = setContext;

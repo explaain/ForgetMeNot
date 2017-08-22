@@ -4,6 +4,9 @@ exports.facebook_challenge = 'forgetmenot_bot_token';
 exports.facebook_message_endpoint = 'https://graph.facebook.com/v2.6/me/messages';
 exports.facebook_message_attachments_endpoint = 'https://graph.facebook.com/v2.6/me/message_attachments';
 exports.facebook_user_endpoint = 'https://graph.facebook.com/v2.6/';
+exports.facebook_profile_endpoint = 'https://graph.facebook.com/v2.6/me/messenger_profile';
+exports.facebook_get_started_payload = 'GET_STARTED_PAYLOAD';
+
 
 // Google Maps api
 exports.google_maps_api = 'AIzaSyBUTELYTrlYEYbYaHjUiKtz5UcPXegaXlw';
