@@ -177,16 +177,20 @@ exports.handleMessage = function(req, res) {
 				totalFailCount: 0
 			}
 			C[sender].failing = false;
-			sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 			try {
 				postback = event.postback.payload;
 			} catch (err) {}
 			if (postback == 'GET_STARTED_PAYLOAD') {
+				sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 				fetchFacebookData(sender);
 				firstMessage(sender);
-			} else if (event.message) {
+			} else if (event.message && !event.message.quick_reply) {
 				console.log("Dealing with message");
-				if ((text = event.message.text)) {
+				if (event.message.quick_reply) {
+					console.log('marking seen');
+					sendSenderAction(sender, 'mark_seen');
+				}	else if ((text = event.message.text)) {
+					sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 					// Handle a text message from this sender
 					switch(text) {
 						case "test":
@@ -236,12 +240,14 @@ exports.handleMessage = function(req, res) {
 					}
 					var memory;
 					if ((memory = C[sender].expectingAttachment)) {
+						sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
+						memory.attachments = [attachment];
 						saveMemory(sender, memory);
 						delete C[sender].expectingAttachment; // Could this be delete memory?
 					} else {
 						C[sender].holdingAttachment = attachment;
 						C[sender].holdingAttachment.userID = sender;
-						sendSenderAction(sender, 'typing_off');
+						// sendSenderAction(sender, 'typing_off');
 					}
 				}
 			}
@@ -292,7 +298,6 @@ function prepareAndSendMessages(messageData, delay, endpoint) {
 			return sendMessageAfterDelay(message, delay + i*2000, endpoint);
 		})
 	).then(function(results) {
-
 		d.resolve(results)
 	});
 	return d.promise;
@@ -332,8 +337,8 @@ var callSendAPI = function(messageData, endpoint) {
 	console.log(JSON.stringify(requestData));
   request(requestData, function (error, response, body) {
     if (!error && response.statusCode == 200) {
-			if (body.recipientId) {
-				console.log("Successfully sent message with id %s to recipient %s", body.messageId, body.recipientId);
+			if (body.recipient_id) {
+				console.log("Successfully sent message with id %s to recipient %s", body.message_id, body.recipient_id);
 			} else if (body.attachment_id) {
 				console.log("Successfully saved attachment");
 			}
@@ -408,8 +413,7 @@ function sendSenderAction(recipientId, sender_action) {
   };
   prepareAndSendMessages(messageData);
 }
-function sendTextMessage(recipientId, messageText, delay) {
-	const d = Q.defer();
+function sendTextMessage(recipientId, messageText, delay, noReaction) {
 	console.log(sendTextMessage);
 	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
 	messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
@@ -421,13 +425,28 @@ function sendTextMessage(recipientId, messageText, delay) {
       text: messageText
     }
   };
-  prepareAndSendMessages(messageData, delay)
-	.then(function() {
-		d.resolve();
-	})
-	return d.promise
+	if (!noReaction) {
+		messageData.message.quick_replies = [
+      {
+        content_type: "text",
+        title: "😍",
+        payload: "DEVELOPER_DEFINED_PAYLOAD_1"
+      },
+      {
+        content_type: "text",
+        title: "😐",
+        payload: "DEVELOPER_DEFINED_PAYLOAD_2"
+      },
+      {
+        content_type: "text",
+        title: "😔",
+        payload: "DEVELOPER_DEFINED_PAYLOAD_3"
+      }
+		];
+	}
+  return prepareAndSendMessages(messageData, delay)
 }
-function sendAttachmentMessage(recipientId, attachment) {
+function sendAttachmentMessage(recipientId, attachment, delay, noReaction) {
 	console.log(sendAttachmentMessage);
 	const messageAttachment = attachment.attachment_id ? {
 		type: attachment.type,
@@ -448,7 +467,26 @@ function sendAttachmentMessage(recipientId, attachment) {
 			attachment: messageAttachment
     }
   };
-  prepareAndSendMessages(messageData);
+	if (!noReaction) {
+		messageData.message.quick_replies = [
+      {
+        content_type: "text",
+        title: "😍",
+        payload: "DEVELOPER_DEFINED_PAYLOAD_1"
+      },
+      {
+        content_type: "text",
+        title: "😐",
+        payload: "DEVELOPER_DEFINED_PAYLOAD_2"
+      },
+      {
+        content_type: "text",
+        title: "😔",
+        payload: "DEVELOPER_DEFINED_PAYLOAD_3"
+      }
+		];
+	}
+  return prepareAndSendMessages(messageData);
 }
 function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
 	console.log(sendAttachmentUpload);
@@ -484,13 +522,13 @@ function firstMessage(recipientId) {
   prepareAndSendMessages(messageData);
 	setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 	setTimeout(function() {
-		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇");
+		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇", 0, true);
 		setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 		setTimeout(function() {
-			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍");
+			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍", 0, true);
 			setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 			setTimeout(function() {
-				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility");
+				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility", 0, true);
 			}, 6000);
 		}, 4000);
 	}, 1000);
@@ -525,6 +563,8 @@ function witResponse(recipientId, message) {
 
 function intentConfidence(sender, message) {
 	console.log(intentConfidence);
+	console.log('message');
+	console.log(message);
 	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
   witClient.message(messageToWit, {})
   .then((data) => {
@@ -539,6 +579,7 @@ function intentConfidence(sender, message) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
     }
+		//Is the next line still needed?
 		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
 		const memory = extractAllContext(data.entities);
 		memory.sender = sender;
@@ -557,7 +598,7 @@ function intentConfidence(sender, message) {
 								saveMemory(sender, memory);
 								delete C[sender].holdingAttachment;
 							} else {
-								C[sender].expectingAttachment = {userID: sender, context: context, sentence: sentence};
+								C[sender].expectingAttachment = memory;
 								sendSenderAction(sender, 'typing_off');
 							}
 						} else {
@@ -566,6 +607,7 @@ function intentConfidence(sender, message) {
 							delete C[sender].holdingAttachment;
 						}
           } catch (err) {
+						console.log(err);
             giveUp(sender);
           }
           break;
@@ -802,7 +844,7 @@ function saveMemory(sender, m) {
 		m.sentence = "I've now remembered that for you! " + m.sentence;
 		return sendResult(sender, m)
 	}).then(function() {
-		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500) : Q.fcall(function() {return null});
+		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
 	}).catch(function(err) {
 		console.log(err);
 	}).done(); /* @TODO: investigate whether done is appropriate here */
@@ -897,9 +939,9 @@ function recallMemory(sender, context, attachments) {
 			return sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
 		}
 	}).then(function() {
-		return C[sender].onboarding ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500) : Q.fcall(function() {return null});
+		return C[sender].onboarding ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500, true) : Q.fcall(function() {return null});
 	}).then(function() {
-		return C[sender].onboarding ? sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...", 1500) : Q.fcall(function() {return null});
+		return C[sender].onboarding ? sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...", 1500, true) : Q.fcall(function() {return null});
 	}).catch(function(err) {
 		console.log(err);
 	}).done();
@@ -912,8 +954,10 @@ function sendResult(sender, memory) {
 		if (~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence = sentence.substring(0, sentence.length - 1);;
 		sentence+=" ⬇️";
 	}
-	return sendTextMessage(sender, sentence)
+	return sendTextMessage(sender, sentence, 0, !!memory.attachments)
 	.then(function() {
+		console.log('memory.attachments');
+		console.log(memory.attachments);
 		return memory.attachments ? sendAttachmentMessage(sender, memory.attachments[0]) : Q.fcall(function() {return null});
 	})
 	.catch(function(err) {
