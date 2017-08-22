@@ -1064,6 +1064,7 @@ function extractAllContext(e) {
 		'assignment',
 		'security',
 		'expectAttachment',
+		'questionType',
 		'unimportant',
 	];
 	names1.forEach(function(name1) {
