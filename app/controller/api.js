@@ -182,7 +182,6 @@ exports.handleMessage = function(req, res) {
 			} catch (err) {}
 			if (postback == 'GET_STARTED_PAYLOAD') {
 				sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
-				fetchFacebookData(sender);
 				firstMessage(sender);
 			} else if (event.message && !event.message.quick_reply) {
 				console.log("Dealing with message");
@@ -200,7 +199,7 @@ exports.handleMessage = function(req, res) {
 							firstMessage(sender);
 							break;
 						case "account":
-							fetchFacebookData(sender);
+							fetchUserData(sender);
 							break;
 						case "location":
 							setTimeZone(sender)
@@ -534,18 +533,63 @@ function firstMessage(recipientId) {
 	}, 1000);
 }
 
-function fetchFacebookData(recipientId) {
-	console.log(fetchFacebookData);
-  console.log("inside the request");
+const fetchUserData = function(userID, forceRefresh) {
+	console.log(fetchUserData);
+	const d = Q.defer()
+	if (!forceRefresh && C[userID] && (userData = C[userID].userData)) {
+		console.log('Already got user data stored:');
+		console.log(userData);
+		d.resolve(userData)
+	} else {
+		fetchUserDataFromDb(userID)
+		.then(function(userData) {
+			console.log('User data fetched from Db:');
+			console.log(userData);
+			if (forceRefresh) {
+				d.reject('Forcing Refresh')
+			} else {
+				d.resolve(userData)
+			}
+		}).catch(function(e) {
+			console.log(e);
+			fetchUserDataFromFacebook(userID)
+			.then(function(userData) {
+				return createUserAccount(userData)
+			}).then(function(userData) {
+				console.log('User data fetched from Facebook:');
+				console.log(userData);
+				d.resolve(userData)
+			}).catch(function(err) {
+				console.log(err);
+				d.reject(err)
+			})
+		})
+	}
+	return d.promise
+}
+
+const fetchUserDataFromDb = function(userID) {
+	console.log(fetchUserDataFromDb);
+	return getDbObject(AlgoliaUsersIndex, userID)
+}
+
+function fetchUserDataFromFacebook(recipientId) {
+	console.log(fetchUserDataFromFacebook);
+	const d = Q.defer()
 	console.log(properties.facebook_user_endpoint + recipientId + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token));
   request({
     uri: properties.facebook_user_endpoint + recipientId + "?fields=first_name,last_name,profile_pic,locale,timezone,gender&access_token=" + (process.env.FACEBOOK_TOKEN || properties.facebook_token),
     method: "GET"
   }, function (error, response, body) {
-		console.log(body);
-		createUserAccount(JSON.parse(body));
+		if (error) {
+			console.log(error);
+			d.resolve(error)
+		} else {
+			console.log(body);
+			d.resolve(JSON.parse(body))
+		}
 	});
-  console.log("out of the request");
+	return d.promise
 }
 
 
@@ -723,7 +767,9 @@ function updateUserLocation(id, newLocation) {
 }
 
 function createUserAccount(userData) {
+	const d = Q.defer()
 	console.log(createUserAccount);
+
 	// Generate the value to be used for the Secure API key
 	const searchOnlyApiKey = userData.id + '_' + crypto.randomBytes(12).toString('hex');
 
@@ -739,7 +785,18 @@ function createUserAccount(userData) {
 	userData.objectID = userData.id;
 	userData.searchOnlyApiKey = searchOnlyApiKey;
 	delete userData.id;
-	AlgoliaUsersIndex.addObject(userData, function(err, content) {});
+	//Save it to current memory
+	C[userData.objectID].userData = userData;
+	AlgoliaUsersIndex.addObject(userData, function(err, content) {
+		if (err) {
+			console.log(err);
+			d.resolve(err)
+		} else {
+			console.log(content);
+			d.resolve(content)
+		}
+	});
+	return d.promise
 }
 // -------------------------------------------- //
 
@@ -826,7 +883,7 @@ function returnKeyValue(id, subject) {
 function saveMemory(sender, m) {
 	console.log(saveMemory);
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
-	return getDbObject(AlgoliaUsersIndex, sender, ['uploadTo'])
+	return fetchUserData(sender)
 	.then(function(content) {
 		m.userID = content ? content.uploadTo || sender : sender;
 		const searchParams = {
@@ -919,10 +976,8 @@ function recallMemory(sender, context, attachments) {
 	console.log(recallMemory);
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
 	//@TODO: Add in check and create new user if none there
-	return getDbObject(AlgoliaUsersIndex, sender, ['readAccess'])
+	return fetchUserData(sender)
 	.then(function(content) {
-		console.log('readAccessContent');
-		console.log(content);
 		const readAccessList = content.readAccess || [];
 		const userIdFilterString = 'userID: ' + sender + readAccessList.map(function(id) {return ' OR userID: '+id}).join('');
 		const searchParams = {
