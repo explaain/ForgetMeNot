@@ -998,6 +998,9 @@ function recallMemory(sender, context, attachments) {
 		return C[sender].onboarding ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500, true) : Q.fcall(function() {return null});
 	}).then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...", 1500, true) : Q.fcall(function() {return null});
+	}).then(function() {
+		C[sender].onboarding = false;
+		Q.fcall(function() {return null});
 	}).catch(function(err) {
 		console.log(err);
 	}).done();
