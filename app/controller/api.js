@@ -656,8 +656,8 @@ function intentConfidence(sender, message) {
           }
           break;
 
-        case "recall":
-          console.log("this is a recall");
+        case "query":
+          console.log("this is a query");
           try {
             recallMemory(sender, memory.context);
           } catch (err) {
