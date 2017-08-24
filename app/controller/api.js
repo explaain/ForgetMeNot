@@ -20,6 +20,13 @@ const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algoli
 const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
 const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
 
+const cloudinary = require('cloudinary');
+cloudinary.config({
+  cloud_name: 'forgetmenot',
+  api_key: '645698655223266',
+  api_secret: 'j2beHW2GZSpQ_zq_8bkmnWgW95k'
+});
+
 const crypto = require("crypto");
 const Q = require("q");
 
@@ -28,7 +35,7 @@ var first_name = "";
 var id = "";
 
 const C = {}; // C is for Context
-
+C.consecutiveWitErrorCount = 0;
 
 
 
@@ -246,6 +253,8 @@ exports.handleMessage = function(req, res) {
 					} else {
 						C[sender].holdingAttachment = attachment;
 						C[sender].holdingAttachment.userID = sender;
+						console.log('--- Now holding attachment: ---');
+						console.log(C[sender].holdingAttachment);
 						// sendSenderAction(sender, 'typing_off');
 					}
 				}
@@ -380,7 +389,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
   };
   prepareAndSendMessages(messageData);
 
-	if (Randoms.gifs[type] && (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
+	if (Randoms.gifs[type] && Math.floor(Math.random()*5)==0) { // (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
 		const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
 		var messageData2 = {
 			recipient: {
@@ -533,6 +542,17 @@ function firstMessage(recipientId) {
 	}, 1000);
 }
 
+// Needs error handling
+function backupAttachment(recipientId, attachmentType, attachmentUrl) {
+	console.log(backupAttachment);
+	const d = Q.defer()
+	cloudinary.uploader.upload(attachmentUrl, function(result) {
+	  console.log(result)
+		d.resolve(result.url)
+	});
+	return d.promise
+}
+
 const fetchUserData = function(userID, forceRefresh) {
 	console.log(fetchUserData);
 	const d = Q.defer()
@@ -612,6 +632,8 @@ function intentConfidence(sender, message) {
 	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
   witClient.message(messageToWit, {})
   .then((data) => {
+		console.log('Wit success!');
+		C.consecutiveWitErrorCount = 0;
 		console.log('\n\n');
 		console.log('--- Entities From wit ---');
 		console.log(data);
@@ -679,6 +701,17 @@ function intentConfidence(sender, message) {
     }
   }).catch(function(err) {
 		console.log(err);
+		if (C.consecutiveWitErrorCount < 5) {
+			console.log(2);
+			setTimeout(function() {
+				C.consecutiveWitErrorCount++;
+				console.log('Assuming Wit error - trying again in 5 seconds (attempt #' + C.consecutiveWitErrorCount + ' of 5) ...');
+				intentConfidence(sender, message)
+			}, 5000)
+		} else {
+			console.log('Giving up');
+			sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
+		}
 	});
 }
 // -------------------------------------------- //
@@ -896,6 +929,9 @@ function saveMemory(sender, m) {
 		return m.hasAttachments ? sendAttachmentUpload(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
 	}).then(function(results) {
 		if (m.hasAttachments && results[0].value.attachment_id) m.attachments[0].attachment_id = results[0].value.attachment_id;
+		return m.hasAttachments && m.attachments[0].type=="image" ? backupAttachment(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
+	}).then(function(url) {
+		if (m.hasAttachments && url) m.attachments[0].url = url;
 		return saveToDb(sender, m)
 	}).then(function() {
 		m.sentence = "I've now remembered that for you! " + m.sentence;
