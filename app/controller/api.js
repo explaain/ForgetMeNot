@@ -647,6 +647,7 @@ function intentConfidence(sender, message) {
     }
 		//Is the next line still needed?
 		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
+		const allowAttachment = !!data.entities.allowAttachment;
 		const memory = extractAllContext(data.entities);
 		memory.sender = sender;
     if (intent) {
@@ -657,7 +658,7 @@ function intentConfidence(sender, message) {
         case "storeMemory":
           try {
             memory.sentence = rewriteSentence(message);
-						if (expectAttachment) {
+						if (expectAttachment || allowAttachment) {
 							memory.sentence+=" ⬇️";
 							if (C[sender].holdingAttachment) {
 								memory.attachments = [C[sender].holdingAttachment];
