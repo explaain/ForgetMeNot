@@ -676,9 +676,8 @@ function intentConfidence(sender, message, statedData) {
 		console.log(data);
 		console.log('\n\n');
 		console.log(JSON.stringify(data));
-		console.log(statedData.intent);
     try {
-      var intent = statedData.intent || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+      var intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
