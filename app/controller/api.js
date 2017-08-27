@@ -170,6 +170,39 @@ exports.fbInformation = function() {
 
 }
 
+exports.storeMemories = function(req, res) {
+	console.log('Made it!');
+	console.log(req);
+	console.log(req.body);
+	const sender = req.body.sender;
+	const text = req.body.text;
+	const statedData = {
+		allInOne: true,
+		intent: 'storeMemory',
+	}
+	if (req.body.objectID) statedData.objectID = req.body.objectID;
+	if (req.body.he)
+	console.log(statedData);
+	intentConfidence(sender, text, statedData)
+	.then(function(result) {
+		res.status(200).send(result);
+	}).catch(function(e) {
+		res.sendStatus(400);
+	})
+}
+exports.deleteMemories = function(req, res) {
+	console.log('Made it!');
+	console.log(req.query);
+	const sender = req.query.sender;
+	const objectID = req.query.objectID;
+	deleteFromDb(sender, objectID)
+	.then(function(result) {
+		res.status(200).send(result);
+	}).catch(function(e) {
+		res.sendStatus(400);
+	})
+}
+
 /* Recieve request */
 exports.handleMessage = function(req, res) {
 	console.log('handleMessage');
@@ -233,7 +266,10 @@ exports.handleMessage = function(req, res) {
 							updateUserLocation(sender, "Bristol")
 							break;
 						default: {
-							intentConfidence(sender, text);
+							intentConfidence(sender, text)
+							.then(function(response) {
+								return sendResponseMessage(response)
+							})
 						}
 					}
 					delete C[sender].expectingAttachment;
@@ -625,7 +661,8 @@ function witResponse(recipientId, message) {
 	}).done();
 }
 
-function intentConfidence(sender, message) {
+function intentConfidence(sender, message, statedData) {
+	const d = Q.defer()
 	console.log(intentConfidence);
 	console.log('message');
 	console.log(message);
@@ -639,13 +676,13 @@ function intentConfidence(sender, message) {
 		console.log(data);
 		console.log('\n\n');
 		console.log(JSON.stringify(data));
+		console.log(statedData.intent);
     try {
-      var intent = JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+      var intent = statedData.intent || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
     }
-		//Is the next line still needed?
 		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
 		const allowAttachment = !!data.entities.allowAttachment;
 		const memory = extractAllContext(data.entities);
@@ -656,32 +693,17 @@ function intentConfidence(sender, message) {
 					tryAnotherMemory(sender);
 					break;
         case "storeMemory":
-          try {
-            memory.sentence = rewriteSentence(message);
-						if (expectAttachment || allowAttachment) {
-							memory.sentence+=" ⬇️";
-							if (C[sender].holdingAttachment) {
-								memory.attachments = [C[sender].holdingAttachment];
-								saveMemory(sender, memory);
-								delete C[sender].holdingAttachment;
-							} else {
-								C[sender].expectingAttachment = memory;
-								sendSenderAction(sender, 'typing_off');
-							}
-						} else {
-							console.log("Trying to process reminder \n");
-							saveMemory(sender, memory); // New Context-Sentence method
-							delete C[sender].holdingAttachment;
-						}
-          } catch (err) {
-						console.log(err);
-            giveUp(sender);
-          }
+					memory.sentence = rewriteSentence(message);
+					storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
+					.then(function(response) {
+						d.resolve(response)
+					})
           break;
 
         case "query":
           console.log("this is a query");
           try {
+						const memory = extractAllContext(data.entities);
             recallMemory(sender, memory.context);
           } catch (err) {
 						console.log(err);
@@ -712,8 +734,60 @@ function intentConfidence(sender, message) {
 		} else {
 			console.log('Giving up');
 			sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
+			d.reject()
 		}
 	});
+	return d.promise
+}
+
+const sendResponseMessage = function(sender, m) {
+	console.log(sendResponseMessage);
+	const d = Q.defer()
+	m.sentence = "I've now remembered that for you! " + m.sentence;
+	sendResult(sender, m)
+	.then(function() {
+		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
+	}).then(function() {
+		d.resolve();
+	}).catch(function(e) {
+		d.reject(e);
+	})
+	return d.promise;
+}
+
+const storeMemory = function(sender, memory, expectAttachment, allowAttachment, statedData) {
+	console.log(storeMemory);
+	const d = Q.defer()
+	try {
+		if (statedData.objectID) memory.objectID = statedData.objectID
+		console.log(statedData);
+		if ((!statedData || !statedData.allInOne) && (expectAttachment || allowAttachment)) {
+			console.log(123);
+			memory.sentence+=" ⬇️";
+			if (C[sender].holdingAttachment) {
+				memory.attachments = [C[sender].holdingAttachment];
+				saveMemory(sender, memory);
+				delete C[sender].holdingAttachment;
+			} else {
+				C[sender].expectingAttachment = memory;
+				sendSenderAction(sender, 'typing_off');
+			}
+		} else {
+			console.log("Trying to process reminder \n");
+			saveMemory(sender, memory)
+			.then(function(response) {
+				if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
+				d.resolve(response);
+			}).catch(function(e) {
+				console.log(e);
+				d.reject(e);
+			});
+		}
+	} catch (err) {
+		console.log(err);
+		giveUp(sender);
+	}
+	return d.promise
 }
 // -------------------------------------------- //
 
@@ -915,6 +989,7 @@ function returnKeyValue(id, subject) {
 
 // ----------Context-Value-Sentence Method------------- //
 function saveMemory(sender, m) {
+	const d = Q.defer()
 	console.log(saveMemory);
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
 	return fetchUserData(sender)
@@ -933,15 +1008,18 @@ function saveMemory(sender, m) {
 		return m.hasAttachments && m.attachments[0].type=="image" ? backupAttachment(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
 	}).then(function(url) {
 		if (m.hasAttachments && url) m.attachments[0].url = url;
-		return saveToDb(sender, m)
+		if (m.objectID) {
+			return updateDb(sender, m)
+		} else {
+			return saveToDb(sender, m)
+		}
 	}).then(function() {
-		m.sentence = "I've now remembered that for you! " + m.sentence;
-		return sendResult(sender, m)
-	}).then(function() {
-		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
-	}).catch(function(err) {
-		console.log(err);
-	}).done(); /* @TODO: investigate whether done is appropriate here */
+		d.resolve({complete: true})
+	}).catch(function(e) {
+		console.log(e);
+		d.reject(e)
+	});
+	return d.promise;
 }
 
 // NO LONGER NEEDED?
@@ -996,12 +1074,46 @@ function saveToDb(sender, memory) {
 	console.log(saveToDb);
 	const d = Q.defer();
 	memory.dateCreated = Date.now();
+	console.log(memory);
 	AlgoliaIndex.addObject(memory, function(err, content){
 		if (err) {
-			sendTextMessage(id, "I couldn't remember that");
-			d.reject();
+			// sendTextMessage(id, "I couldn't remember that");
+			d.reject(err);
 		} else {
-			console.log('User memory saved successfully!');
+			console.log('User memory created successfully!');
+			d.resolve();
+		}
+	});
+	return d.promise;
+}
+function updateDb(sender, memory) {
+	console.log(updateDb);
+	const d = Q.defer();
+	memory.dateUpdated = Date.now();
+	console.log(memory);
+	AlgoliaIndex.saveObject(memory, function(err, content){
+		if (err) {
+			// sendTextMessage(id, "I couldn't remember that");
+			console.log(err);
+			d.reject(err);
+		} else {
+			console.log('User memory updated successfully!');
+			d.resolve();
+		}
+	});
+	return d.promise;
+}
+function deleteFromDb(sender, objectID) {
+	console.log(deleteFromDb);
+	const d = Q.defer();
+	console.log(objectID);
+	AlgoliaIndex.deleteObject(objectID, function(err, content){
+		if (err) {
+			// sendTextMessage(id, "I couldn't do that");
+			console.log(err);
+			d.reject(err);
+		} else {
+			console.log('User memory deleted successfully!');
 			d.resolve();
 		}
 	});

@@ -12,6 +12,7 @@ var mongoose = require('mongoose');
 var apiController = require('./app/controller/api');
 
 var routes = require('./app/routes/index');
+var api = require('./app/routes/api');
 var users = require('./app/routes/users');
 var webhooks = require('./app/routes/webhooks');
 
@@ -33,6 +34,7 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', routes);
+app.use('/api', api);
 app.use('/users', users);
 app.use('/webhook', webhooks);
 
