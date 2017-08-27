@@ -267,8 +267,14 @@ exports.handleMessage = function(req, res) {
 							break;
 						default: {
 							intentConfidence(sender, text)
-							.then(function(response) {
-								return sendResponseMessage(response)
+							.then(function(memory) {
+								console.log('------');
+								console.log(0.25);
+								console.log(sender, memory);
+								console.log('------');
+								if (memory.intent == 'storeMemory') {
+									sendResponseMessage(sender, memory)
+								}
 							})
 						}
 					}
@@ -284,7 +290,14 @@ exports.handleMessage = function(req, res) {
 					if ((memory = C[sender].expectingAttachment)) {
 						sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 						memory.attachments = [attachment];
-						saveMemory(sender, memory);
+						saveMemory(sender, memory)
+						.then(function() {
+							console.log('------');
+							console.log(0.5);
+							console.log(sender, memory);
+							console.log('------');
+							sendResponseMessage(sender, memory)
+						});
 						delete C[sender].expectingAttachment; // Could this be delete memory?
 					} else {
 						C[sender].holdingAttachment = attachment;
@@ -676,34 +689,44 @@ function intentConfidence(sender, message, statedData) {
 		console.log(data);
 		console.log('\n\n');
 		console.log(JSON.stringify(data));
+		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
+		const allowAttachment = !!data.entities.allowAttachment;
+		const memory = extractAllContext(data.entities);
     try {
-      var intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+      memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
     }
-		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
-		const allowAttachment = !!data.entities.allowAttachment;
-		const memory = extractAllContext(data.entities);
 		memory.sender = sender;
-    if (intent) {
-      switch(intent) {
+    if (memory.intent) {
+      switch(memory.intent) {
 				case "nextResult":
 					tryAnotherMemory(sender);
 					break;
         case "storeMemory":
 					memory.sentence = rewriteSentence(message);
 					storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
-					.then(function(response) {
-						d.resolve(response)
+					.then(function() {
+						console.log('------');
+						console.log(1);
+						console.log(sender, memory);
+						console.log('------');
+						d.resolve(memory)
 					})
           break;
 
         case "query":
           console.log("this is a query");
           try {
-						const memory = extractAllContext(data.entities);
-            recallMemory(sender, memory.context);
+            recallMemory(sender, memory.context)
+						.then(function() {
+							console.log('------');
+							console.log(1.5);
+							console.log(sender, memory);
+							console.log('------');
+							d.resolve(memory)
+						})
           } catch (err) {
 						console.log(err);
             giveUp(sender);
@@ -716,7 +739,7 @@ function intentConfidence(sender, message, statedData) {
 					break;
 
         default:
-					sendGenericMessage(sender, intent);
+					sendGenericMessage(sender, memory.intent);
           break;
 
       }
@@ -742,6 +765,7 @@ function intentConfidence(sender, message, statedData) {
 const sendResponseMessage = function(sender, m) {
 	console.log(sendResponseMessage);
 	const d = Q.defer()
+	console.log(m);
 	m.sentence = "I've now remembered that for you! " + m.sentence;
 	sendResult(sender, m)
 	.then(function() {
@@ -758,14 +782,24 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 	console.log(storeMemory);
 	const d = Q.defer()
 	try {
-		if (statedData.objectID) memory.objectID = statedData.objectID
+		if (statedData && statedData.objectID) memory.objectID = statedData.objectID
 		console.log(statedData);
 		if ((!statedData || !statedData.allInOne) && (expectAttachment || allowAttachment)) {
 			console.log(123);
 			memory.sentence+=" ⬇️";
 			if (C[sender].holdingAttachment) {
 				memory.attachments = [C[sender].holdingAttachment];
-				saveMemory(sender, memory);
+				saveMemory(sender, memory)
+				.then(function(sender, memory) {
+					console.log('------');
+					console.log(2);
+					console.log(sender, memory);
+					console.log('------');
+					d.resolve(memory);
+				}).catch(function(e) {
+					console.log(e);
+					d.reject(e);
+				});
 				delete C[sender].holdingAttachment;
 			} else {
 				C[sender].expectingAttachment = memory;
@@ -774,9 +808,13 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 		} else {
 			console.log("Trying to process reminder \n");
 			saveMemory(sender, memory)
-			.then(function(response) {
+			.then(function() {
 				if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
-				d.resolve(response);
+				console.log('------');
+				console.log(3);
+				console.log(sender, memory);
+				console.log('------');
+				d.resolve(memory);
 			}).catch(function(e) {
 				console.log(e);
 				d.reject(e);
@@ -1013,7 +1051,11 @@ function saveMemory(sender, m) {
 			return saveToDb(sender, m)
 		}
 	}).then(function() {
-		d.resolve({complete: true})
+		console.log('------');
+		console.log(4);
+		console.log(sender, m);
+		console.log('------');
+		d.resolve(m)
 	}).catch(function(e) {
 		console.log(e);
 		d.reject(e)
@@ -1122,6 +1164,7 @@ function deleteFromDb(sender, objectID) {
 
 function recallMemory(sender, context, attachments) {
 	console.log(recallMemory);
+	const d = Q.defer()
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
 	//@TODO: Add in check and create new user if none there
 	return fetchUserData(sender)
@@ -1148,13 +1191,16 @@ function recallMemory(sender, context, attachments) {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...", 1500, true) : Q.fcall(function() {return null});
 	}).then(function() {
 		C[sender].onboarding = false;
-		Q.fcall(function() {return null});
+		d.resolve()
 	}).catch(function(err) {
 		console.log(err);
-	}).done();
+		d.reject(err)
+	});
+	return d.promise
 }
 
 function sendResult(sender, memory) {
+	const d = Q.defer()
 	console.log(sendResult);
 	var sentence = memory.sentence;
 	if (memory.attachments) {
@@ -1166,10 +1212,13 @@ function sendResult(sender, memory) {
 		console.log('memory.attachments');
 		console.log(memory.attachments);
 		return memory.attachments ? sendAttachmentMessage(sender, memory.attachments[0]) : Q.fcall(function() {return null});
-	})
-	.catch(function(err) {
+	}).then(function() {
+		d.resolve()
+	}).catch(function(err) {
 		console.log(err);
-	}).done();
+		d.reject(err)
+	});
+	return d.promise
 }
 
 function tryAnotherMemory(sender) {
@@ -1263,7 +1312,7 @@ function extractAllContext(e) {
 	const finalEntities = {
 		context: []
 	};
-	if (entities.intent) delete entities.intent;
+	// if (entities.intent) delete entities.intent;
 	const names1 = Object.keys(entities);
 	const nonContext = [
 		'act',
