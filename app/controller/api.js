@@ -274,6 +274,8 @@ exports.handleMessage = function(req, res) {
 								console.log('------');
 								if (memory.intent == 'storeMemory') {
 									sendResponseMessage(sender, memory)
+								}	else if (memory.intent == 'setTask' && memory.triggerType == 'browser') {
+									sendResponseMessage(sender, memory)
 								}
 							})
 						}
@@ -733,9 +735,29 @@ function intentConfidence(sender, message, statedData) {
           }
           break;
 
-				case "setTask": // Need to convert this to Random Text/GIFs
-					sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!");
-					sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
+				case "setTask":
+					try {
+						memory.triggerType = data.entities.browser[0] ? 'browser' : null;
+						console.log('memory.triggerType', memory.triggerType);
+						memory.triggerUrl = data.entities.browser[0].entities.url[0].domain;
+						console.log('memory.triggerUrl', memory.triggerUrl);
+					} catch(e) {
+
+					}
+					if (memory.triggerType == 'browser') {
+						memory.sentence = rewriteSentence(message);
+						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
+						.then(function() {
+							console.log('------');
+							console.log(1);
+							console.log(sender, memory);
+							console.log('------');
+							d.resolve(memory)
+						})
+					} else {
+						sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!");
+						sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
+					}
 					break;
 
         default:
@@ -766,7 +788,7 @@ const sendResponseMessage = function(sender, m) {
 	console.log(sendResponseMessage);
 	const d = Q.defer()
 	console.log(m);
-	m.sentence = "I've now remembered that for you! " + m.sentence;
+	m.sentence = (m.intent=='setTask' ? "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + m.sentence;
 	sendResult(sender, m)
 	.then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
@@ -806,7 +828,7 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 				sendSenderAction(sender, 'typing_off');
 			}
 		} else {
-			console.log("Trying to process reminder \n");
+			console.log("Trying to store memory \n");
 			saveMemory(sender, memory)
 			.then(function() {
 				if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
