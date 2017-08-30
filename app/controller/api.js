@@ -274,7 +274,7 @@ exports.handleMessage = function(req, res) {
 								console.log('------');
 								if (memory.intent == 'storeMemory') {
 									sendResponseMessage(sender, memory)
-								}	else if (memory.intent == 'setTask' && memory.triggerType == 'browser') {
+								}	else if (memory.intent == 'setTask' && memory.triggerUrl) {
 									sendResponseMessage(sender, memory)
 								}
 							})
@@ -742,9 +742,14 @@ function intentConfidence(sender, message, statedData) {
 						memory.triggerUrl = data.entities.browser[0].entities.url[0].domain;
 						console.log('memory.triggerUrl', memory.triggerUrl);
 					} catch(e) {
+						try {
+							memory.triggerUrl = data.entities.url[0].domain;
+							console.log('memory.triggerUrl', memory.triggerUrl);
+						} catch(e) {
 
+						}
 					}
-					if (memory.triggerType == 'browser') {
+					if (memory.triggerUrl) {
 						memory.sentence = rewriteSentence(message);
 						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 						.then(function() {
@@ -1343,6 +1348,7 @@ function extractAllContext(e) {
 		'expectAttachment',
 		'questionType',
 		'unimportant',
+		'intent',
 	];
 	names1.forEach(function(name1) {
 		if (nonContext.indexOf(name1) == -1) { // Only proceeds for context-like entities
