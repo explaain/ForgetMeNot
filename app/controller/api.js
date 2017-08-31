@@ -172,7 +172,6 @@ exports.fbInformation = function() {
 
 exports.storeMemories = function(req, res) {
 	console.log('Made it!');
-	console.log(req);
 	console.log(req.body);
 	const sender = req.body.sender;
 	const text = req.body.text;
@@ -695,9 +694,7 @@ function intentConfidence(sender, message, statedData) {
 		const allowAttachment = !!data.entities.allowAttachment;
 		const memory = extractAllContext(data.entities);
     try {
-			if (!statedData || !statedData.intent) {
-				memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
-			}
+			memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
