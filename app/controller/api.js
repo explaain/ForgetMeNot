@@ -695,7 +695,9 @@ function intentConfidence(sender, message, statedData) {
 		const allowAttachment = !!data.entities.allowAttachment;
 		const memory = extractAllContext(data.entities);
     try {
-      memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+			if (!statedData || !statedData.intent) {
+				memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+			}
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
