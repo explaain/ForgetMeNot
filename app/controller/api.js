@@ -810,10 +810,10 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 	try {
 		if (statedData && statedData.objectID) memory.objectID = statedData.objectID
 		console.log(statedData);
-		if ((!statedData || !statedData.allInOne) && (expectAttachment || allowAttachment)) {
+		if ((!statedData || !statedData.allInOne) && (C[sender].holdingAttachment || expectAttachment || allowAttachment)) {
 			console.log(123);
-			memory.sentence+=" ⬇️";
 			if (C[sender].holdingAttachment) {
+				memory.sentence+=" ⬇️";
 				memory.attachments = [C[sender].holdingAttachment];
 				saveMemory(sender, memory)
 				.then(function(sender, memory) {
@@ -827,9 +827,12 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 					d.reject(e);
 				});
 				delete C[sender].holdingAttachment;
-			} else {
+			} else if (expectAttachment || allowAttachment) {
+				memory.sentence+=" ⬇️";
 				C[sender].expectingAttachment = memory;
 				sendSenderAction(sender, 'typing_off');
+			} else {
+
 			}
 		} else {
 			console.log("Trying to store memory \n");
