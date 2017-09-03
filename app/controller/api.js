@@ -222,11 +222,49 @@ exports.handleMessage = function(req, res) {
 			if (postback == 'GET_STARTED_PAYLOAD') {
 				sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 				firstMessage(sender);
-			} else if (event.message && !event.message.quick_reply) {
+			} else if (event.message) {
 				console.log("Dealing with message");
 				if (event.message.quick_reply) {
 					console.log('marking seen');
 					sendSenderAction(sender, 'mark_seen');
+					switch (event.message.quick_reply.payload) {
+						case "USER_FEEDBACK_MIDDLE":
+							if (C[sender].lastAction.intent == 'storeMemory' || C[sender].lastAction.intent == 'query')
+							sendCorrectionMessage(sender);
+							break;
+
+						case "USER_FEEDBACK_BOTTOM":
+							if (C[sender].lastAction.intent == 'storeMemory' || C[sender].lastAction.intent == 'query')
+							sendCorrectionMessage(sender);
+							break;
+
+						case "CORRECTION_QUERY":
+							deleteFromDb(sender, C[sender].lastAction.objectID)
+							.then(function() {
+								return intentConfidence(sender, text, {intent: 'query'})
+							}).then(function(memory) {
+								C[sender].lastAction = memory;
+							})
+							break;
+
+						case "CORRECTION_STORE":
+							intentConfidence(sender, text, {intent: 'storeMemory'})
+							.then(function(memory) {
+								C[sender].lastAction = memory;
+								sendResponseMessage(sender, memory)
+							})
+							break;
+
+						case "CORRECTION_QUERY_DIFFERENT":
+							intentConfidence(sender, text, {hitNum: C[sender].lastAction.hitNum+1})
+							.then(function(memory) {
+								C[sender].lastAction = memory;
+							})
+							break;
+
+						default:
+							break;
+					}
 				}	else if ((text = event.message.text)) {
 					sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 					// Handle a text message from this sender
@@ -271,6 +309,7 @@ exports.handleMessage = function(req, res) {
 								console.log(0.25);
 								console.log(sender, memory);
 								console.log('------');
+								C[sender].lastAction = memory;
 								if (memory.intent == 'storeMemory') {
 									sendResponseMessage(sender, memory)
 								}	else if (memory.intent == 'setTask' && memory.triggerUrl) {
@@ -485,20 +524,20 @@ function sendTextMessage(recipientId, messageText, delay, noReaction) {
   };
 	if (!noReaction) {
 		messageData.message.quick_replies = [
-      {
+			{
         content_type: "text",
         title: "😍",
-        payload: "DEVELOPER_DEFINED_PAYLOAD_1"
+        payload: "USER_FEEDBACK_TOP"
       },
       {
         content_type: "text",
         title: "😐",
-        payload: "DEVELOPER_DEFINED_PAYLOAD_2"
+        payload: "USER_FEEDBACK_MIDDLE"
       },
       {
         content_type: "text",
         title: "😔",
-        payload: "DEVELOPER_DEFINED_PAYLOAD_3"
+        payload: "USER_FEEDBACK_BOTTOM"
       }
 		];
 	}
@@ -530,19 +569,61 @@ function sendAttachmentMessage(recipientId, attachment, delay, noReaction) {
       {
         content_type: "text",
         title: "😍",
-        payload: "DEVELOPER_DEFINED_PAYLOAD_1"
+        payload: "USER_FEEDBACK_TOP"
       },
       {
         content_type: "text",
         title: "😐",
-        payload: "DEVELOPER_DEFINED_PAYLOAD_2"
+        payload: "USER_FEEDBACK_MIDDLE"
       },
       {
         content_type: "text",
         title: "😔",
-        payload: "DEVELOPER_DEFINED_PAYLOAD_3"
+        payload: "USER_FEEDBACK_BOTTOM"
       }
 		];
+	}
+  return prepareAndSendMessages(messageData);
+}
+function sendCorrectionMessage(recipientId) {
+	console.log(sendAttachmentMessage);
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+			text: "Whoops - was there something you would have preferred me to do?"
+    }
+  };
+	switch (C[sender].lastAction.intent) {
+		case 'storeMemory':
+			messageData.message.quick_replies = [
+	      {
+	        content_type: "text",
+	        title: "💭 Recall a memory",
+	        payload: "CORRECTION_QUERY"
+	      },
+	      // {
+	      //   content_type: "text",
+	      //   title: "🔀 Store a different memory",
+	      //   payload: "CORRECTION_STORE_DIFFERENT"
+	      // }
+			];
+			break;
+		case 'query':
+			messageData.message.quick_replies = [
+	      {
+	        content_type: "text",
+	        title: "💬 Store a memory",
+	        payload: "CORRECTION_STORE"
+	      },
+	      {
+	        content_type: "text",
+	        title: "🔀 Recall a different memory",
+	        payload: "CORRECTION_QUERY_DIFFERENT"
+	      }
+			];
+			break;
 	}
   return prepareAndSendMessages(messageData);
 }
@@ -693,8 +774,11 @@ function intentConfidence(sender, message, statedData) {
 		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
 		const allowAttachment = !!data.entities.allowAttachment;
 		const memory = extractAllContext(data.entities);
+		console.log('statedData');
+		console.log(statedData);
     try {
 			memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+			console.log(memory);
     } catch(err) {
       console.log("no intent - send generic fail message");
 			giveUp(sender);
@@ -720,7 +804,8 @@ function intentConfidence(sender, message, statedData) {
         case "query":
           console.log("this is a query");
           try {
-            recallMemory(sender, memory.context)
+						memory.hitNum = statedData ? statedData.hitNum : 0;
+            recallMemory(sender, memory.context, false, memory.hitNum)
 						.then(function() {
 							console.log('------');
 							console.log(1.5);
@@ -837,7 +922,7 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 		} else {
 			console.log("Trying to store memory \n");
 			saveMemory(sender, memory)
-			.then(function() {
+			.then(function(memory) {
 				if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
 				console.log('------');
 				console.log(3);
@@ -1079,7 +1164,7 @@ function saveMemory(sender, m) {
 		} else {
 			return saveToDb(sender, m)
 		}
-	}).then(function() {
+	}).then(function(m) {
 		console.log('------');
 		console.log(4);
 		console.log(sender, m);
@@ -1151,7 +1236,9 @@ function saveToDb(sender, memory) {
 			d.reject(err);
 		} else {
 			console.log('User memory created successfully!');
-			d.resolve();
+			console.log(content);
+			memory.objectID = content.objectID
+			d.resolve(memory);
 		}
 	});
 	return d.promise;
@@ -1191,7 +1278,7 @@ function deleteFromDb(sender, objectID) {
 }
 
 
-function recallMemory(sender, context, attachments) {
+function recallMemory(sender, context, attachments, hitNum) {
 	console.log(recallMemory);
 	const d = Q.defer()
 	const searchTerm = context.map(function(e){return e.value}).join(' ');
@@ -1207,12 +1294,13 @@ function recallMemory(sender, context, attachments) {
 		};
 		return searchDb(AlgoliaIndex, searchParams)
 	}).then(function(content) {
-		if (content.hits.length) {
+		const thisHitNum = Math.min()
+		if (content.hits.length - (hitNum || 0) > 0) {
 			C[sender].lastResults = content.hits;
 			C[sender].lastResultTried = 0;
-			return sendResult(sender, content.hits[0]);
+			return sendResult(sender, content.hits[(hitNum || 0)]);
 		} else {
-			return sendTextMessage(sender, "Sorry, I can't remember anything similar to that!")
+			return sendTextMessage(sender, "Sorry, I can't remember anything" + ((hitNum && hitNum > 0) ? " else" : "") + " similar to that!")
 		}
 	}).then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500, true) : Q.fcall(function() {return null});
