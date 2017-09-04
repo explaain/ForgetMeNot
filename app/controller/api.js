@@ -481,20 +481,22 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
 	try {
 		if (Randoms.gifs[type] && Math.floor(Math.random()*5)==0) { // (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
 			const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
-			var messageData2 = {
-				recipient: {
-					id: recipientId
-				},
-				message: {
-					attachment: {
-						type: "image",
-						payload: {
-							url: gif[Math.floor(Math.random() * gif.length)]
+			if (gif) {
+				var messageData2 = {
+					recipient: {
+						id: recipientId
+					},
+					message: {
+						attachment: {
+							type: "image",
+							payload: {
+								url: gif[Math.floor(Math.random() * gif.length)]
+							}
 						}
 					}
-				}
-			};
-			prepareAndSendMessages(messageData2);
+				};
+				prepareAndSendMessages(messageData2);
+			}
 		}
 	} catch(e) {
 		console.log(e);
