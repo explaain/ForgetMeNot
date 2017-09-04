@@ -862,7 +862,7 @@ function intentConfidence(sender, message, statedData) {
 			setTimeout(function() {
 				C.consecutiveWitErrorCount++;
 				console.log('Assuming Wit error - trying again in 5 seconds (attempt #' + C.consecutiveWitErrorCount + ' of 5) ...');
-				intentConfidence(sender, message)
+				intentConfidence(sender, message, statedData)
 			}, 5000)
 		} else {
 			console.log('Giving up');
