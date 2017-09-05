@@ -271,12 +271,29 @@ exports.handleMessage = function(req, res) {
 							})
 							break;
 
+						case "CORRECTION_ADD_ATTACHMENT":
+							const updatedMemory = C[sender].lastAction
+							updatedMemory.attachments = [C[sender].holdingAttachment];
+							saveMemory(sender, updatedMemory)
+							.then(function(memory) {
+								if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
+								C[sender].lastAction = memory;
+								sendResponseMessage(sender, memory)
+							}).catch(function(e) {
+								console.log(e);
+							});
+							break;
+
 						case "CORRECTION_GET_DATETIME":
 							sendTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
 							break;
 
 						case "CORRECTION_GET_URL":
 							sendTextMessage(sender, "Sure thing - what's the url?", 0, []);
+							break;
+
+						case "PREPARE_ATTACHMENT":
+							sendTextMessage(sender, "Sure thing - type your message below and I'll attach it...", 0, []);
 							break;
 
 						default:
@@ -323,8 +340,7 @@ exports.handleMessage = function(req, res) {
 							intentConfidence(sender, text)
 							.then(function(memory) {
 								console.log('------');
-								console.log(0.25);
-								console.log(sender, memory);
+								console.log(0.25, sender, memory);
 								console.log('------');
 								C[sender].lastAction = memory;
 								if (memory.intent == 'storeMemory' || memory.intent == 'setTask.URL' || (memory.intent == 'setTask.dateTime' && memory.triggerDateTime)) {
@@ -338,32 +354,26 @@ exports.handleMessage = function(req, res) {
 					}
 					delete C[sender].expectingAttachment;
 				} else if ((attachments = event.message.attachments)) {
+					const quickReplies = [
+						{
+							content_type: "text",
+							title: "⤴️ Previous",
+							payload: "CORRECTION_ADD_ATTACHMENT"
+						},
+						{
+							content_type: "text",
+							title: "⤵️ Next",
+							payload: "PREPARE_ATTACHMENT"
+						}
+					];
 					const type = attachments[0].type;
 					const url = (type=='fallback') ? attachments[0].url : attachments[0].payload.url;
-					const attachment = {
+					C[sender].holdingAttachment = {
 						type: type,
-						url: url
+						url: url,
+						userID: sender
 					}
-					var memory;
-					if ((memory = C[sender].expectingAttachment)) {
-						sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
-						memory.attachments = [attachment];
-						saveMemory(sender, memory)
-						.then(function() {
-							console.log('------');
-							console.log(0.5);
-							console.log(sender, memory);
-							console.log('------');
-							sendResponseMessage(sender, memory)
-						});
-						delete C[sender].expectingAttachment; // Could this be delete memory?
-					} else {
-						C[sender].holdingAttachment = attachment;
-						C[sender].holdingAttachment.userID = sender;
-						console.log('--- Now holding attachment: ---');
-						console.log(C[sender].holdingAttachment);
-						// sendSenderAction(sender, 'typing_off');
-					}
+					sendTextMessage(sender, "Did you want me to add this to the previous message or the next one?", 0, quickReplies)
 				}
 			}
 		});
@@ -788,9 +798,9 @@ function intentConfidence(sender, message, statedData) {
 	console.log(intentConfidence);
 	console.log('message');
 	console.log(message);
-	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
-	const apiaiRequest = apiaiApp.textRequest(messageToWit, {
-    sessionId: 'forgetmenot'
+	const messageToApiai = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
+	const apiaiRequest = apiaiApp.textRequest(messageToApiai, {
+    sessionId: 'forgetmenot',
 	});
 
 	apiaiRequest.on('response', function(response) {
@@ -856,13 +866,12 @@ function intentConfidence(sender, message, statedData) {
 						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
 						if (memory.triggerUrl) {
 							memory.triggerUrl = memory.triggerUrl[0]
-							memory.actionSentence = rewriteSentence(getActionSentence(memory.sentence, memory.context))
+							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory', memory);
 							storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 							.then(function() {
 								console.log('------');
-								console.log(1);
-								console.log(sender, memory);
+								console.log(1, sender, memory);
 								console.log('------');
 								d.resolve(memory)
 							}).catch(function(e) {
@@ -901,7 +910,7 @@ function intentConfidence(sender, message, statedData) {
 							dateTime = dateTime[0]
 							memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 							memory.triggerDateTime = new Date(memory.triggerDateTime);
-							memory.actionSentence = rewriteSentence(getActionSentence(memory.sentence, memory.context))
+							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory');
 							console.log(memory);
 							schedule.scheduleJob(memory.triggerDateTime, function(){
@@ -944,7 +953,7 @@ function intentConfidence(sender, message, statedData) {
 						memory.sentence = C[sender].lastAction.sentence;
 						memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 						memory.triggerDateTime = new Date(memory.triggerDateTime);
-						memory.actionSentence = rewriteSentence(getActionSentence(memory.sentence, memory.context))
+						memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 						console.log('memory');
 						console.log(memory);
 						schedule.scheduleJob(memory.triggerDateTime, function(){
@@ -968,13 +977,12 @@ function intentConfidence(sender, message, statedData) {
 						memory.context = C[sender].lastAction.context;
 						memory.entities = C[sender].lastAction.entities;
 						memory.sentence = C[sender].lastAction.sentence;
-						memory.actionSentence = rewriteSentence(getActionSentence(memory.sentence, memory.context))
+						memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 						console.log('memory', memory);
 						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 						.then(function() {
 							console.log('------');
-							console.log(1);
-							console.log(sender, memory);
+							console.log(1.1, sender, memory);
 							console.log('------');
 							d.resolve(memory)
 						}).catch(function(e) {
@@ -1025,7 +1033,9 @@ const sendResponseMessage = function(sender, m) {
 			break;
 
 		case 'setTask.URL':
-			m.confirmationSentence = "I've now set that reminder for you! 🔔 \n\n" + m.actionSentence + '\n🖥 ' + m.triggerUrl;
+			m.confirmationSentence = "I've now set that reminder for you! 🔔 \n\n"
+															+ m.actionSentence + '\n'
+															+ '🖥 ' + m.triggerUrl;
 			break;
 
 		case 'setTask.dateTime':
@@ -1056,39 +1066,27 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 	try {
 		if (statedData && statedData.objectID) memory.objectID = statedData.objectID
 		console.log(statedData);
-		if ((!statedData || !statedData.allInOne) && (C[sender].holdingAttachment || expectAttachment || allowAttachment)) {
-			console.log(123);
-			if (C[sender].holdingAttachment) {
-				memory.sentence+=" ⬇️";
-				memory.attachments = [C[sender].holdingAttachment];
-				saveMemory(sender, memory)
-				.then(function(sender, memory) {
-					console.log('------');
-					console.log(2);
-					console.log(sender, memory);
-					console.log('------');
-					d.resolve(memory);
-				}).catch(function(e) {
-					console.log(e);
-					d.reject(e);
-				});
-				delete C[sender].holdingAttachment;
-			} else if (expectAttachment || allowAttachment) {
-				memory.sentence+=" ⬇️";
-				C[sender].expectingAttachment = memory;
-				sendSenderAction(sender, 'typing_off');
-			} else {
-
-			}
+		if ((!statedData || !statedData.allInOne) && C[sender] && C[sender].holdingAttachment) {
+			memory.sentence+=" ⬇️";
+			memory.attachments = [C[sender].holdingAttachment];
+			saveMemory(sender, memory)
+			.then(function(sender, memory) {
+				console.log('------');
+				console.log(2, sender, memory);
+				console.log('------');
+				d.resolve(memory);
+			}).catch(function(e) {
+				console.log(e);
+				d.reject(e);
+			});
+			if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
 		} else {
 			console.log("Trying to store memory \n");
 			saveMemory(sender, memory)
 			.then(function(memory) {
-				console.log(memory);
 				if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
 				console.log('------');
-				console.log(3);
-				console.log(sender, memory);
+				console.log(3, sender, memory);
 				console.log('------');
 				d.resolve(memory);
 			}).catch(function(e) {
@@ -1305,7 +1303,7 @@ function saveMemory(sender, m) {
 	const d = Q.defer()
 	console.log(saveMemory);
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
-	return fetchUserData(sender)
+	fetchUserData(sender)
 	.then(function(content) {
 		m.userID = content ? content.uploadTo || sender : sender;
 		const searchParams = {
@@ -1417,7 +1415,7 @@ function updateDb(sender, memory) {
 			d.reject(err);
 		} else {
 			console.log('User memory updated successfully!');
-			d.resolve();
+			d.resolve(memory);
 		}
 	});
 	return d.promise;
@@ -1589,15 +1587,23 @@ const getActionSentence = function(sentence, context) {
 	const actionContext = [];
 	context.forEach(function(c) {
 		if (c.type.indexOf('action-') > -1) {
+			console.log(c.type);
+			console.log(c.value);
 			actionContext.push(c.value);
 		}
 	})
 	const start = Math.min.apply(null, actionContext.map(function(a) {
-		return sentence.indexOf(a)
+		return sentence.toLowerCase().indexOf(a.toLowerCase())
+	}).filter(function(b) {
+		return b > -1
 	}))
 	const end = Math.max.apply(null, actionContext.map(function(a) {
-		return sentence.indexOf(a) + a.length
+		return sentence.toLowerCase().indexOf(a.toLowerCase()) + a.length
+	}).filter(function(b) {
+		return b > -1
 	}))
+	console.log(start);
+	console.log(end);
 	const text = rewriteSentence(sentence.substring(start, end+1))
 	console.log(text);
 	console.log(emoji.translate(text, true));
