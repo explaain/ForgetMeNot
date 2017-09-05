@@ -966,7 +966,10 @@ const sendResponseMessage = function(sender, m) {
 			break;
 
 		case 'setTask.dateTime':
-			m.confirmationSentence = "I've now set that reminder for you! 🕓 \n\n" + m.actionSentence + '\n⏱ ' + m.triggerDateTime;
+			m.confirmationSentence = "I've now set that reminder for you! 🕓 \n\n"
+			 												+ m.actionSentence + '\n'
+															+ '🗓 ' + m.triggerDateTime.toDateString() + '\n'
+															+ '⏱ ' + m.triggerDateTime.toLocaleTimeString()
 
 			break;
 
