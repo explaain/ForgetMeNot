@@ -7,11 +7,8 @@ var properties = require('../config/properties.js');
 var schedule = require('node-schedule');
 var chrono = require('chrono-node')
 var googleMapsClient = require('../api_clients/googleMapsClient.js');
-var Wit = require('node-wit').Wit;
 var apiai = require('apiai');
 var emoji = require('moji-translate');
-
-//var interactive = require('node-wit').interactive;
 
 // models for users and the memories/reminders they submit
 var user = require('../model/user');
@@ -46,6 +43,25 @@ var id = "";
 const C = {}; // C is for Context
 C.consecutiveWitErrorCount = 0;
 
+const rescheduleAllReminders = function() {
+	const searchParams = {
+		query: '',
+		filters: 'intent: setTask.dateTime'
+	};
+	searchDb(AlgoliaIndex, searchParams)
+	.then(function(content) {
+		const reminders = content.hits
+		console.log('reminders')
+		console.log(reminders)
+		reminders.forEach(function(r) {
+			scheduleReminder(r);
+		})
+	}).catch(function(e) {
+		console.log(e);
+	});
+}
+rescheduleAllReminders();
+
 
 
 var getContext = function(sender, context) {
@@ -77,35 +93,6 @@ var requestPromise = function(params) {
 }
 
 
-
-// Wit AI
-var witClient = new Wit({
-  accessToken: properties.wit_ai_server_access,
-  actions: {
-    send(request, response) {
-      return new Promise(function(resolve, reject) {
-        const {sessionId, context, entities} = request;
-        const {text, quickreplies} = response;
-        console.log('user said...', request.text);
-        console.log('sending...', JSON.stringify(response.text));
-        console.log('quick response...', JSON.stringify(response.quickreplies));
-        sendTextMessage(sessionId, response.text);
-        return resolve();
-      });
-    },
-    setLocationWit({sessionId, context, entities}) {
-      console.log(`Wit extracted ${JSON.stringify(entities)}`);
-      setLocation();
-      return Promise.resolve(context);
-    },
-    userLocationWit({sessionId, context, text, entities}) {
-      userLocation(sessionId);
-      console.log(`Session ${sessionId} received ${text}`);
-      console.log(`Wit extracted ${JSON.stringify(entities)}`);
-      return Promise.resolve(context);
-    }
-  },
-});
 
 // check token for connecting to facebook webhook
 exports.tokenVerification = function(req, res) {
@@ -373,7 +360,7 @@ exports.handleMessage = function(req, res) {
 						url: url,
 						userID: sender
 					}
-					sendTextMessage(sender, "Did you want me to add this to the previous message or the next one?", 0, quickReplies)
+					sendTextMessage(sender, "Did you want me to add this " + type + " to the previous message or the next one?", 0, quickReplies)
 				}
 			}
 		});
@@ -485,12 +472,6 @@ function receivedMessage(event) {
 }
 
 function giveUp(sender) {
-	console.log(giveUp);
-	C[sender].failing = true;
-	C[sender].totalFailCount++;
-	console.log('C[sender].totalFailCount');
-	console.log(C[sender].totalFailCount);
-	if (C[sender].consecutiveFails < 4) C[sender].consecutiveFails++;
 	sendGenericMessage(sender, 'dunno', C[sender].consecutiveFails);
 }
 
@@ -498,7 +479,22 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
 	console.log(C[sender].consecutiveFails)
 	console.log(sendGenericMessage);
   // Bot didnt know what to do with message from user
-	const text = (typeof optionalCounter!=undefined) ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
+	if (!Randoms.texts[type])
+		type = 'dunno';
+	if (type == 'dunno') {
+		console.log(giveUp);
+		C[sender].failing = true;
+		C[sender].totalFailCount++;
+		console.log('C[sender].totalFailCount');
+		console.log(C[sender].totalFailCount);
+		if (C[sender].consecutiveFails < 4) C[sender].consecutiveFails++;
+	}
+	console.log(type);
+	console.log(optionalCounter);
+	console.log(Randoms.texts[type][0]);
+	console.log((typeof optionalCounter!=undefined && Array.isArray(Randoms.texts[type][0])));
+	const text = (typeof optionalCounter!=undefined && Array.isArray(Randoms.texts[type][0])) ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
+	console.log(text);
   var messageData = {
     recipient: {
       id: recipientId
@@ -781,24 +777,13 @@ function fetchUserDataFromFacebook(recipientId) {
 }
 
 
-// ------------Wit Code Below--------------- //
-// fetch wits response
-function witResponse(recipientId, message) {
-	console.log(witResponse);
-  witClient.runActions(recipientId, message, {})
-  .then((data) => {
-    //console.log(JSON.stringify(data));
-  }).catch(function(err) {
-		console.log(err);
-	}).done();
-}
 
 function intentConfidence(sender, message, statedData) {
 	const d = Q.defer()
 	console.log(intentConfidence);
 	console.log('message');
 	console.log(message);
-	const messageToApiai = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
+	const messageToApiai = message.substring(0, 256); // Only sends API.AI the first 256 characters as it can't handle more than that
 	const apiaiRequest = apiaiApp.textRequest(messageToApiai, {
     sessionId: 'forgetmenot',
 	});
@@ -863,6 +848,7 @@ function intentConfidence(sender, message, statedData) {
 
 				case "setTask.URL":
 					try {
+						memory.reminderRecipient = sender;
 						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
 						if (memory.triggerUrl) {
 							memory.triggerUrl = memory.triggerUrl[0]
@@ -903,6 +889,7 @@ function intentConfidence(sender, message, statedData) {
 
 				case "setTask.dateTime":
 					try {
+						memory.reminderRecipient = sender;
 						var dateTime = memory.entities.time || memory.entities.date || memory.entities['date-time'];
 						console.log('dateTime');
 						console.log(dateTime);
@@ -913,11 +900,13 @@ function intentConfidence(sender, message, statedData) {
 							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory');
 							console.log(memory);
-							schedule.scheduleJob(memory.triggerDateTime, function(){
-								sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
-							  console.log('Reminder!', memory.actionSentence);
-							});
-							d.resolve(memory)
+							storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
+							.then(function() {
+								scheduleReminder(memory);
+								d.resolve(memory)
+							}).catch(function(e) {
+								d.reject(e)
+							})
 						} else {
 							C[sender].lastAction = memory;
 							const quickReplies = [
@@ -995,7 +984,7 @@ function intentConfidence(sender, message, statedData) {
 					break;
 
         default:
-					sendGenericMessage(sender, 'dunno', C[sender].consecutiveFails );
+					sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
           break;
 
       }
@@ -1099,6 +1088,13 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 		giveUp(sender);
 	}
 	return d.promise
+}
+
+const scheduleReminder = function(memory) {
+	schedule.scheduleJob(memory.triggerDateTime, function(){
+		sendTextMessage(memory.reminderRecipient || memory.userID, '🔔 Reminder! ' + memory.actionSentence)
+		console.log('Reminder!', memory.actionSentence);
+	});
 }
 // -------------------------------------------- //
 
