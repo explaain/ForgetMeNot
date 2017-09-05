@@ -6,12 +6,18 @@ var schedule = require('node-schedule');
 var chrono = require('chrono-node')
 var googleMapsClient = require('../api_clients/googleMapsClient.js');
 var Wit = require('node-wit').Wit;
+var apiai = require('apiai');
+var emoji = require('moji-translate');
+
 //var interactive = require('node-wit').interactive;
 
 // models for users and the memories/reminders they submit
 var user = require('../model/user');
 var timeMemory = require('../model/timeBasedMemory');
 var keyValue = require('../model/rememberKeyValue');
+
+//API.ai setup
+var apiaiApp = apiai("bdeba24b4bcf40feb24a1b8c1f86f3f3");
 
 // Algolia setup
 const AlgoliaSearch = require('algoliasearch');
@@ -263,6 +269,10 @@ exports.handleMessage = function(req, res) {
 							})
 							break;
 
+						case "CORRECTION_GET_DATETIME":
+							sendTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
+							break;
+
 						default:
 							break;
 					}
@@ -311,7 +321,7 @@ exports.handleMessage = function(req, res) {
 								console.log(sender, memory);
 								console.log('------');
 								C[sender].lastAction = memory;
-								if (memory.intent == 'storeMemory' || (memory.intent == 'setTask' && (memory.triggerUrl || memory.triggerDateTime))) {
+								if (memory.intent == 'storeMemory' || memory.intent == 'setTask.URL' || (memory.intent == 'setTask.dateTime' && memory.triggerDateTime)) {
 									sendResponseMessage(sender, memory)
 								}
 							})
@@ -515,7 +525,7 @@ function sendSenderAction(recipientId, sender_action) {
   };
   prepareAndSendMessages(messageData);
 }
-function sendTextMessage(recipientId, messageText, delay, noReaction) {
+function sendTextMessage(recipientId, messageText, delay, quickReplies) {
 	console.log(sendTextMessage);
 	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
 	messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
@@ -527,8 +537,8 @@ function sendTextMessage(recipientId, messageText, delay, noReaction) {
       text: messageText
     }
   };
-	if (!noReaction) {
-		messageData.message.quick_replies = [
+	if (!quickReplies || quickReplies.length) {
+		messageData.message.quick_replies = quickReplies || [
 			{
         content_type: "text",
         title: "😍",
@@ -548,7 +558,7 @@ function sendTextMessage(recipientId, messageText, delay, noReaction) {
 	}
   return prepareAndSendMessages(messageData, delay)
 }
-function sendAttachmentMessage(recipientId, attachment, delay, noReaction) {
+function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
 	console.log(sendAttachmentMessage);
 	const messageAttachment = attachment.attachment_id ? {
 		type: attachment.type,
@@ -569,8 +579,8 @@ function sendAttachmentMessage(recipientId, attachment, delay, noReaction) {
 			attachment: messageAttachment
     }
   };
-	if (!noReaction) {
-		messageData.message.quick_replies = [
+	if (!quickReplies || quickReplies.length) {
+		messageData.message.quick_replies = quickReplies || [
       {
         content_type: "text",
         title: "😍",
@@ -666,13 +676,13 @@ function firstMessage(recipientId) {
   prepareAndSendMessages(messageData);
 	setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 	setTimeout(function() {
-		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇", 0, true);
+		sendTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇", 0, []);
 		setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 		setTimeout(function() {
-			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍", 0, true);
+			sendTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍", 0, []);
 			setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
 			setTimeout(function() {
-				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility", 0, true);
+				sendTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility", 0, []);
 			}, 6000);
 		}, 4000);
 	}, 1000);
@@ -767,55 +777,56 @@ function intentConfidence(sender, message, statedData) {
 	console.log('message');
 	console.log(message);
 	const messageToWit = message.substring(0, 256); // Only sends Wit the first 256 characters as it can't handle more than that
-  witClient.message(messageToWit, {})
-  .then((data) => {
-		console.log('Wit success!');
+	const apiaiRequest = apiaiApp.textRequest(messageToWit, {
+    sessionId: 'forgetmenot'
+	});
+
+	apiaiRequest.on('response', function(response) {
+		console.log('API.AI success!');
 		C.consecutiveWitErrorCount = 0;
 		console.log('\n\n');
-		console.log('--- Entities From wit ---');
-		console.log(data);
+		console.log('--- Entities From API.AI ---');
+		console.log(response);
 		console.log('\n\n');
+		const data = response.result;
 		console.log(JSON.stringify(data));
-		const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
-		const allowAttachment = !!data.entities.allowAttachment;
-		const memory = extractAllContext(data.entities);
+		// const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
+		// const allowAttachment = !!data.entities.allowAttachment;
+		const expectAttachment = null; // Temporary
+		const allowAttachment = false; // Temporary
+		const memory = extractAllContext(data.parameters);
+		memory.sender = sender;
+		memory.sentence = rewriteSentence(message);
 		console.log('statedData');
 		console.log(statedData);
+		console.log('memory');
+		console.log(memory);
+		console.log(JSON.stringify(memory));
     try {
-			memory.intent = (statedData && statedData.intent) || JSON.stringify(data.entities.intent[0].value).replace(/"/g, '');
+			memory.intent = (statedData && statedData.intent) || data.metadata.intentName;
 			console.log(memory);
     } catch(err) {
-      console.log("no intent - send generic fail message");
+      console.log("no intent - send generic fail message"); //This should start figuring out the intent instead of giving up!
 			giveUp(sender);
     }
-		memory.sender = sender;
+
     if (memory.intent) {
       switch(memory.intent) {
 				case "nextResult":
 					tryAnotherMemory(sender);
 					break;
         case "storeMemory":
-					memory.sentence = rewriteSentence(message);
 					storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 					.then(function() {
-						console.log('------');
-						console.log(1);
-						console.log(sender, memory);
-						console.log('------');
 						d.resolve(memory)
 					})
           break;
 
         case "query":
-          console.log("this is a query");
           try {
 						memory.hitNum = statedData ? statedData.hitNum : 0;
             recallMemory(sender, memory.context, false, memory.hitNum)
 						.then(function() {
-							console.log('------');
-							console.log(1.5);
-							console.log(sender, memory);
-							console.log('------');
 							d.resolve(memory)
 						})
           } catch (err) {
@@ -824,46 +835,11 @@ function intentConfidence(sender, message, statedData) {
           }
           break;
 
-				case "setTask":
+				case "setTask.URL":
 					try {
-						memory.triggerType = data.entities.browser[0] ? 'browser' : null;
-						console.log('memory.triggerType', memory.triggerType);
-						memory.triggerUrl = data.entities.browser[0].entities.url[0].domain;
+						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities.website;
+						memory.triggerUrl = memory.triggerUrl[0]
 						console.log('memory.triggerUrl', memory.triggerUrl);
-					} catch(e) {
-						try {
-							memory.triggerUrl = data.entities.url[0].domain;
-							console.log('memory.triggerUrl', memory.triggerUrl);
-						} catch(e) {
-							try {
-								const dateTime = data.entities.time || data.entities.datetime;
-								if (dateTime) {
-									console.log('dateTime');
-									console.log(dateTime);
-									memory.triggerType = 'dateTime';
-									console.log('dateTime[0].value');
-									console.log(dateTime[0].value);
-									memory.triggerDateTime = chrono.parseDate(dateTime[0].value) || dateTime[0].value;
-									console.log('memory.triggerDateTime');
-									console.log(memory.triggerDateTime);
-									memory.triggerDateTime = new Date(memory.triggerDateTime);
-									console.log('memory.triggerDateTime');
-									console.log(memory.triggerDateTime);
-									console.log(data.entities.user);
-									memory.actionSentence = rewriteSentence(data.entities.user.map(function(e) {
-										console.log(e);
-										return e.entities ? e.value : '';
-									}).join(''))
-									console.log('memory.actionSentence');
-									console.log(memory.actionSentence);
-								}
-							} catch(e) {
-								console.log(e);
-							}
-						}
-					}
-					if (memory.triggerUrl) {
-						memory.sentence = rewriteSentence(message);
 						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 						.then(function() {
 							console.log('------');
@@ -871,28 +847,86 @@ function intentConfidence(sender, message, statedData) {
 							console.log(sender, memory);
 							console.log('------');
 							d.resolve(memory)
-						})
-					} else if (memory.triggerDateTime && memory.actionSentence && memory.actionSentence.length) {
-						memory.sentence = rewriteSentence(message);
+						});
+					} catch(e) {
+
+					}
+					break;
+
+				case "setTask.dateTime":
+					try {
+						var dateTime = memory.entities.time || memory.entities.date || memory.entities.datetime;
+						console.log('dateTime');
+						console.log(dateTime);
+						if (dateTime) {
+							dateTime = dateTime[0]
+							memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
+							memory.triggerDateTime = new Date(memory.triggerDateTime);
+							memory.actionSentence = rewriteSentence(getActionSentence(memory.sentence, memory.context))
+							console.log('memory');
+							console.log(memory);
+							schedule.scheduleJob(memory.triggerDateTime, function(){
+								sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
+							  console.log('Reminder!', memory.actionSentence);
+							});
+							d.resolve(memory)
+						} else {
+							C[sender].lastAction = memory;
+							const quickReplies = [
+								{
+					        content_type: "text",
+					        title: "⏱ Date/time",
+					        payload: "CORRECTION_GET_DATETIME"
+					      },
+					      {
+					        content_type: "text",
+					        title: "📂 Just store",
+					        payload: "CORRECTION_STORE"
+					      }
+							];
+							sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store a memory for later?", 0, quickReplies)
+							d.resolve(memory);
+						}
+					} catch(e) {
+						console.log(e);
+					}
+					break;
+
+				case "provideDateTime":
+					try {
+						var dateTime = memory.entities.time || memory.entities.date || memory.entities.datetime;
+						console.log('dateTime');
+						console.log(dateTime);
+						dateTime = dateTime[0];
+						memory.intent = C[sender].lastAction.intent;
+						memory.context = C[sender].lastAction.context;
+						memory.entities = C[sender].lastAction.entities;
+						memory.sentence = C[sender].lastAction.sentence;
+						memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
+						memory.triggerDateTime = new Date(memory.triggerDateTime);
+						memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+						console.log('memory');
+						console.log(memory);
 						schedule.scheduleJob(memory.triggerDateTime, function(){
-							sendTextMessage(sender, 'Reminder! 🕓 🔔 ' + memory.actionSentence)
+							sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
 						  console.log('Reminder!', memory.actionSentence);
 						});
 						d.resolve(memory)
-					} else {
-						sendTextMessage(sender, "Sorry, I'm afraid I don't understand that reminder/task just yet!");
-						// sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
+					} catch(e) {
+						console.log(e);
 					}
 					break;
 
         default:
-					sendGenericMessage(sender, memory.intent);
+					sendGenericMessage(sender, 'dunno' /* memory.intent */ );
           break;
 
       }
     }
-  }).catch(function(err) {
-		console.log(err);
+	});
+
+	apiaiRequest.on('error', function(e) {
+		console.log(e);
 		if (C.consecutiveWitErrorCount < 5) {
 			console.log(2);
 			setTimeout(function() {
@@ -906,6 +940,9 @@ function intentConfidence(sender, message, statedData) {
 			d.reject()
 		}
 	});
+
+	apiaiRequest.end();
+
 	return d.promise
 }
 
@@ -913,10 +950,10 @@ const sendResponseMessage = function(sender, m) {
 	console.log(sendResponseMessage);
 	const d = Q.defer()
 	console.log(m);
-	m.confirmationSentence = (m.intent=='setTask' ? m.triggerDateTime ? "I've now set that reminder for you! 🕓 🔔 " : "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + (m.triggerDateTime ? '\n\n🕹 ' + m.actionSentence + '\n⏱ ' + m.triggerDateTime : m.sentence);
+	m.confirmationSentence = (m.intent=='setTask' ? m.triggerDateTime ? "I've now set that reminder for you! 🕓 🔔 " : "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + (m.triggerDateTime ? '\n\n' + m.actionSentence + '\n⏱ ' + m.triggerDateTime : m.sentence);
 	sendResult(sender, m, true)
 	.then(function() {
-		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
+		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, []) : Q.fcall(function() {return null});
 	}).then(function() {
 		d.resolve();
 	}).catch(function(e) {
@@ -1459,6 +1496,25 @@ function rewriteSentence(sentence) { // Currently very primitive!
   return sentence;
 }
 
+const getActionSentence = function(sentence, context) {
+	const actionContext = [];
+	context.forEach(function(c) {
+		if (c.type.indexOf('action-') > -1) {
+			actionContext.push(c.value);
+		}
+	})
+	const start = Math.min.apply(null, actionContext.map(function(a) {
+		return sentence.indexOf(a)
+	}))
+	const end = Math.max.apply(null, actionContext.map(function(a) {
+		return sentence.indexOf(a) + a.length
+	}))
+	const text = rewriteSentence(sentence.substring(start, end+1))
+	console.log(text);
+	console.log(emoji.translate(text, true));
+	return (emoji.translate(text, true) || '✅') + ' ' + text;
+}
+
 /* Now returns both context and all the other bits (except intent) */
 function extractAllContext(e) {
 	console.log(extractAllContext);
@@ -1467,32 +1523,47 @@ function extractAllContext(e) {
 		context: []
 	};
 	// if (entities.intent) delete entities.intent;
-	const names1 = Object.keys(entities);
-	const nonContext = [
-		'act',
-		'assignment',
-		'security',
-		'expectAttachment',
-		'questionType',
-		'unimportant',
-		'intent',
-	];
-	names1.forEach(function(name1) {
-		if (nonContext.indexOf(name1) == -1) { // Only proceeds for context-like entities
-			entities[name1].forEach(function(entity) {
-				if (entity.entities) {
-					const names2 = Object.keys(entity.entities);
-					names2.forEach(function(name2) {
-						finalEntities.context = finalEntities.context.concat(entity.entities[name2])
-					});
-					delete entity.entities;
-				}
-				finalEntities.context.push(entity);
-			})
-		} else {
-			finalEntities[name1] = entities[name1]
+	const names = Object.keys(entities);
+	names.forEach(function(name) {
+		if (entities[name]) {
+			if (!Array.isArray(entities[name])) entities[name] = [entities[name]];
+			entities[name].forEach(function(value) {
+				finalEntities.context.push({
+					type: name,
+					value: value
+				})
+			});
 		}
 	})
+	finalEntities.entities = entities;
+
+	// const nonContext = [
+	// 	'act',
+	// 	'assignment',
+	// 	'security',
+	// 	'expectAttachment',
+	// 	'questionType',
+	// 	'unimportant',
+	// 	'intent',
+	// ];
+
+	// const names1 = Object.keys(entities);
+	// names1.forEach(function(name1) {
+	// 	if (nonContext.indexOf(name1) == -1) { // Only proceeds for context-like entities
+	// 		entities[name1].forEach(function(entity) {
+	// 			if (entity.entities) {
+	// 				const names2 = Object.keys(entity.entities);
+	// 				names2.forEach(function(name2) {
+	// 					finalEntities.context = finalEntities.context.concat(entity.entities[name2])
+	// 				});
+	// 				delete entity.entities;
+	// 			}
+	// 			finalEntities.context.push(entity);
+	// 		})
+	// 	} else {
+	// 		finalEntities[name1] = entities[name1]
+	// 	}
+	// })
 
 	console.log('\n\n');
 	console.log('--- Entities Now Prepared ---');
@@ -1609,7 +1680,6 @@ Randoms.texts.bye = [
 ];
 Randoms.gifs.bye = [
 	'https://media.giphy.com/media/l0IydZclkNcC6NZa8/giphy.gif',
-	'https://media.giphy.com/media/3ohfFviABAlNf3OfOE/giphy.gif',
 	'https://media.giphy.com/media/TUJyGPCtQ7ZUk/giphy.gif',
 ];
 
