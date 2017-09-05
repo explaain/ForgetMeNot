@@ -1,5 +1,7 @@
 /* @TODO: See whether we can just return promises directly in functions */
 
+process.env.TZ = 'Europe/London' // Forces the timezone to be London
+
 var request = require('request');
 var properties = require('../config/properties.js');
 var schedule = require('node-schedule');
