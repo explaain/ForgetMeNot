@@ -875,7 +875,7 @@ function intentConfidence(sender, message, statedData) {
 					} else if (memory.triggerDateTime) {
 						memory.sentence = rewriteSentence(message);
 						schedule.scheduleJob(memory.triggerDateTime, function(){
-							sendTextMessage(sender, 'Reminder! ' + memory.actionSentence)
+							sendTextMessage(sender, 'Reminder! 🕓 🔔 ' + memory.actionSentence)
 						  console.log('Reminder!', memory.actionSentence);
 						});
 						d.resolve(memory)
@@ -913,7 +913,7 @@ const sendResponseMessage = function(sender, m) {
 	console.log(sendResponseMessage);
 	const d = Q.defer()
 	console.log(m);
-	m.confirmationSentence = (m.intent=='setTask' ? m.triggerDateTime ? "I've now set that reminder for you! 🕓 🔔 " : "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + m.sentence + (m.triggerDateTime ? '\n\nReminder time: ' + m.triggerDateTime : '');
+	m.confirmationSentence = (m.intent=='setTask' ? m.triggerDateTime ? "I've now set that reminder for you! 🕓 🔔 " : "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + (m.triggerDateTime ? '\n\n🕹 ' + m.actionSentence + '\n⏱ ' + m.triggerDateTime : m.sentence);
 	sendResult(sender, m, true)
 	.then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
