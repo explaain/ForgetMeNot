@@ -3,6 +3,7 @@
 var request = require('request');
 var properties = require('../config/properties.js');
 var schedule = require('node-schedule');
+var chrono = require('chrono-node')
 var googleMapsClient = require('../api_clients/googleMapsClient.js');
 var Wit = require('node-wit').Wit;
 //var interactive = require('node-wit').interactive;
@@ -310,9 +311,7 @@ exports.handleMessage = function(req, res) {
 								console.log(sender, memory);
 								console.log('------');
 								C[sender].lastAction = memory;
-								if (memory.intent == 'storeMemory') {
-									sendResponseMessage(sender, memory)
-								}	else if (memory.intent == 'setTask' && memory.triggerUrl) {
+								if (memory.intent == 'storeMemory' || (memory.intent == 'setTask' && (memory.triggerUrl || memory.triggerDateTime))) {
 									sendResponseMessage(sender, memory)
 								}
 							})
@@ -836,7 +835,31 @@ function intentConfidence(sender, message, statedData) {
 							memory.triggerUrl = data.entities.url[0].domain;
 							console.log('memory.triggerUrl', memory.triggerUrl);
 						} catch(e) {
-
+							try {
+								const dateTime = data.entities.time || data.entities.datetime;
+								if (dateTime) {
+									console.log('dateTime');
+									console.log(dateTime);
+									memory.triggerType = 'dateTime';
+									console.log('dateTime[0].value');
+									console.log(dateTime[0].value);
+									memory.triggerDateTime = chrono.parseDate(dateTime[0].value) || dateTime[0].value;
+									console.log('memory.triggerDateTime');
+									console.log(memory.triggerDateTime);
+									memory.triggerDateTime = new Date(memory.triggerDateTime);
+									console.log('memory.triggerDateTime');
+									console.log(memory.triggerDateTime);
+									console.log(data.entities.user);
+									memory.actionSentence = rewriteSentence(data.entities.user.map(function(e) {
+										console.log(e);
+										return e.entities ? e.value : '';
+									}).join(''))
+									console.log('memory.actionSentence');
+									console.log(memory.actionSentence);
+								}
+							} catch(e) {
+								console.log(e);
+							}
 						}
 					}
 					if (memory.triggerUrl) {
@@ -849,8 +872,15 @@ function intentConfidence(sender, message, statedData) {
 							console.log('------');
 							d.resolve(memory)
 						})
+					} else if (memory.triggerDateTime) {
+						memory.sentence = rewriteSentence(message);
+						schedule.scheduleJob(memory.triggerDateTime, function(){
+							sendTextMessage(sender, 'Reminder! ' + memory.actionSentence)
+						  console.log('Reminder!', memory.actionSentence);
+						});
+						d.resolve(memory)
 					} else {
-						sendTextMessage(sender, "Sorry, I'm afraid I don't do reminders or carry out tasks just yet!");
+						sendTextMessage(sender, "Sorry, I'm afraid I don't understand that reminder/task just yet!");
 						sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
 					}
 					break;
@@ -883,8 +913,8 @@ const sendResponseMessage = function(sender, m) {
 	console.log(sendResponseMessage);
 	const d = Q.defer()
 	console.log(m);
-	m.sentence = (m.intent=='setTask' ? "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + m.sentence;
-	sendResult(sender, m)
+	m.confirmationSentence = (m.intent=='setTask' ? m.triggerDateTime ? "I've now set that reminder for you! 🕓 🔔 " : "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + m.sentence + (m.triggerDateTime ? '\n\nReminder time: ' + m.triggerDateTime : '');
+	sendResult(sender, m, true)
 	.then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, true) : Q.fcall(function() {return null});
 	}).then(function() {
@@ -1322,10 +1352,10 @@ function recallMemory(sender, context, attachments, hitNum) {
 	return d.promise
 }
 
-function sendResult(sender, memory) {
+function sendResult(sender, memory, confirmation) {
 	const d = Q.defer()
 	console.log(sendResult);
-	var sentence = memory.sentence;
+	var sentence = confirmation ? memory.confirmationSentence : memory.sentence;
 	if (memory.attachments) {
 		if (~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence = sentence.substring(0, sentence.length - 1);;
 		sentence+=" ⬇️";
@@ -1402,6 +1432,7 @@ function rewriteSentence(sentence) { // Currently very primitive!
   const remove = [
     /^Remember that/i,
     /^Remember/i,
+		/^Remind me to/i,
     /^Remind me/i,
     /^Please/i,
 		/please\.^/i,
