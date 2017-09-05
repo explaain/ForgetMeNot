@@ -391,8 +391,10 @@ curl -X POST -H "Content-Type: application/json" -d '{
 */
 
 function prepareAndSendMessages(messageData, delay, endpoint) {
-	const d = Q.defer();
 	console.log(prepareAndSendMessages);
+	console.log(messageData);
+	if (messageData.json) console.log(messageData.json.message);
+	const d = Q.defer();
 	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
 	const messageDataArray = textArray.map(function(text) {
 		const data = JSON.parse(JSON.stringify(messageData));
@@ -474,9 +476,10 @@ function giveUp(sender) {
 }
 
 function sendGenericMessage(recipientId, type, optionalCounter) {
+	console.log(C[sender].consecutiveFails)
 	console.log(sendGenericMessage);
   // Bot didnt know what to do with message from user
-	const text = optionalCounter ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
+	const text = (typeof optionalCounter!=undefined) ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
   var messageData = {
     recipient: {
       id: recipientId
@@ -837,9 +840,10 @@ function intentConfidence(sender, message, statedData) {
 
 				case "setTask.URL":
 					try {
-						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities.website;
+						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
 						memory.triggerUrl = memory.triggerUrl[0]
-						console.log('memory.triggerUrl', memory.triggerUrl);
+						memory.actionSentence = rewriteSentence(getActionSentence(memory.sentence, memory.context))
+						console.log('memory', memory);
 						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 						.then(function() {
 							console.log('------');
@@ -918,7 +922,7 @@ function intentConfidence(sender, message, statedData) {
 					break;
 
         default:
-					sendGenericMessage(sender, 'dunno' /* memory.intent */ );
+					sendGenericMessage(sender, 'dunno', C[sender].consecutiveFails );
           break;
 
       }
@@ -950,7 +954,23 @@ const sendResponseMessage = function(sender, m) {
 	console.log(sendResponseMessage);
 	const d = Q.defer()
 	console.log(m);
-	m.confirmationSentence = (m.intent=='setTask' ? m.triggerDateTime ? "I've now set that reminder for you! 🕓 🔔 " : "I've now set that task for you! 🔔 " : "I've now remembered that for you! ") + (m.triggerDateTime ? '\n\n' + m.actionSentence + '\n⏱ ' + m.triggerDateTime : m.sentence);
+	switch (m.intent) {
+		case 'storeMemory':
+			m.confirmationSentence = "I've now remembered that for you! " + m.sentence;
+			break;
+
+		case 'setTask.URL':
+			m.confirmationSentence = "I've now set that reminder for you! 🔔 \n\n" + m.actionSentence + '\n🖥 ' + m.triggerUrl;
+			break;
+
+		case 'setTask.dateTime':
+			m.confirmationSentence = "I've now set that reminder for you! 🕓 \n\n" + m.actionSentence + '\n⏱ ' + m.triggerDateTime;
+
+			break;
+
+		default:
+
+	}
 	sendResult(sender, m, true)
 	.then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, []) : Q.fcall(function() {return null});
@@ -996,6 +1016,7 @@ const storeMemory = function(sender, memory, expectAttachment, allowAttachment, 
 			console.log("Trying to store memory \n");
 			saveMemory(sender, memory)
 			.then(function(memory) {
+				console.log(memory);
 				if (C[sender] && C[sender].holdingAttachment) delete C[sender].holdingAttachment;
 				console.log('------');
 				console.log(3);
@@ -1520,13 +1541,15 @@ function extractAllContext(e) {
 	console.log(extractAllContext);
 	const entities = JSON.parse(JSON.stringify(e)); // Hopefully this avoids deleting/editing things in the original entities object outside this function!
 	const finalEntities = {
-		context: []
+		context: [],
+		entities: {}
 	};
 	// if (entities.intent) delete entities.intent;
 	const names = Object.keys(entities);
 	names.forEach(function(name) {
-		if (entities[name]) {
+		if (entities[name] && entities[name].length) {
 			if (!Array.isArray(entities[name])) entities[name] = [entities[name]];
+			finalEntities.entities[name] = entities[name];
 			entities[name].forEach(function(value) {
 				finalEntities.context.push({
 					type: name,
@@ -1534,8 +1557,7 @@ function extractAllContext(e) {
 				})
 			});
 		}
-	})
-	finalEntities.entities = entities;
+	});
 
 	// const nonContext = [
 	// 	'act',
@@ -1617,6 +1639,9 @@ Randoms = {
 
 Randoms.texts.dunno = [];
 Randoms.gifs.dunno = [];
+Randoms.texts.dunno[0] = [
+	"I'm sorry I didn't quite understand that, I'm still learning though!"
+]
 Randoms.texts.dunno[1] = [
 	"I'm sorry I didn't quite understand that, I'm still learning though!"
 ]
