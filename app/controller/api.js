@@ -872,7 +872,7 @@ function intentConfidence(sender, message, statedData) {
 							console.log('------');
 							d.resolve(memory)
 						})
-					} else if (memory.triggerDateTime) {
+					} else if (memory.triggerDateTime && memory.actionSentence && memory.actionSentence.length) {
 						memory.sentence = rewriteSentence(message);
 						schedule.scheduleJob(memory.triggerDateTime, function(){
 							sendTextMessage(sender, 'Reminder! 🕓 🔔 ' + memory.actionSentence)
@@ -881,7 +881,7 @@ function intentConfidence(sender, message, statedData) {
 						d.resolve(memory)
 					} else {
 						sendTextMessage(sender, "Sorry, I'm afraid I don't understand that reminder/task just yet!");
-						sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
+						// sendAttachmentMessage(sender, {type: 'image', url: "https://media.giphy.com/media/RddAJiGxTPQFa/giphy.gif"});
 					}
 					break;
 
