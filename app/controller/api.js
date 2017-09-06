@@ -46,7 +46,7 @@ C.consecutiveWitErrorCount = 0;
 const rescheduleAllReminders = function() {
 	const searchParams = {
 		query: '',
-		filters: 'intent: setTask.dateTime'
+		filters: 'intent: setTask.dateTime AND triggerDateTimeNumeric > ' + ((new Date()).getTime())
 	};
 	searchDb(AlgoliaIndex, searchParams)
 	.then(function(content) {
@@ -897,6 +897,7 @@ function intentConfidence(sender, message, statedData) {
 							dateTime = dateTime[0]
 							memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 							memory.triggerDateTime = new Date(memory.triggerDateTime);
+							memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
 							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory');
 							console.log(memory);
@@ -942,6 +943,7 @@ function intentConfidence(sender, message, statedData) {
 						memory.sentence = C[sender].lastAction.sentence;
 						memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 						memory.triggerDateTime = new Date(memory.triggerDateTime);
+						memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
 						memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 						console.log('memory');
 						console.log(memory);
