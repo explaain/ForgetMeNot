@@ -64,6 +64,7 @@ rescheduleAllReminders();
 
 
 
+
 var getContext = function(sender, context) {
 	try {
 		return C[sender][context];
@@ -827,65 +828,82 @@ function intentConfidence(sender, message, statedData) {
     sessionId: 'forgetmenot',
 	});
 
-	apiaiRequest.on('response', function(response) {
-		console.log('API.AI success!');
-		C.consecutiveWitErrorCount = 0;
-		console.log('\n\n');
-		console.log('--- Entities From API.AI ---');
-		console.log(response);
-		console.log('\n\n');
-		const data = response.result;
-		console.log(JSON.stringify(data));
-		// const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
-		// const allowAttachment = !!data.entities.allowAttachment;
-		const expectAttachment = null; // Temporary
-		const allowAttachment = false; // Temporary
-		const memory = extractAllContext(data.parameters);
-		memory.sender = sender;
-		memory.sentence = rewriteSentence(message);
-		console.log('statedData');
-		console.log(statedData);
-		console.log('memory');
-		console.log(memory);
-		console.log(JSON.stringify(memory));
-    try {
-			memory.intent = (statedData && statedData.intent) || data.metadata.intentName;
-			console.log(memory);
-    } catch(e) {
-			//This should start figuring out the intent instead of giving up!
-			d.reject(e)
-    }
 
-    if (memory.intent) {
-      switch(memory.intent) {
-				case "nextResult":
+	const headers = {
+	    'Content-Type': 'application/json; charset=utf-8',
+	    'Authorization': 'Bearer bdeba24b4bcf40feb24a1b8c1f86f3f3'
+	};
+
+	const dataString = '{\'query\':\'' + message + '\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\'}';
+
+	const options = {
+	    url: 'https://api.api.ai/v1/query?v=20150910',
+	    method: 'POST',
+	    headers: headers,
+	    body: dataString
+	};
+
+	function callback(error, response, body) {
+    if (!error && response.statusCode == 200) {
+			console.log('API.AI success!');
+			C.consecutiveWitErrorCount = 0;
+			console.log('\n\n');
+			console.log('--- Entities From API.AI ---');
+			console.log(body);
+			console.log('\n\n');
+			const data = JSON.parse(body).result;
+			console.log(data);
+			console.log(JSON.stringify(data));
+			// const expectAttachment = data.entities.expectAttachment ? JSON.stringify(data.entities.expectAttachment[0].value) : null;
+			// const allowAttachment = !!data.entities.allowAttachment;
+			const expectAttachment = null; // Temporary
+			const allowAttachment = false; // Temporary
+			const memory = extractAllContext(data.parameters);
+			memory.sender = sender;
+			memory.sentence = rewriteSentence(message);
+			console.log('statedData');
+			console.log(statedData);
+			console.log('memory');
+			console.log(memory);
+			console.log(JSON.stringify(memory));
+			try {
+				memory.intent = (statedData && statedData.intent) || data.metadata.intentName;
+				console.log(memory);
+			} catch(e) {
+				//This should start figuring out the intent instead of giving up!
+				d.reject(e)
+			}
+
+			if (memory.intent) {
+				switch(memory.intent) {
+					case "nextResult":
 					tryAnotherMemory(sender);
 					break;
-        case "storeMemory":
+					case "storeMemory":
 					storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 					.then(function() {
 						d.resolve(memory)
 					}).catch(function(e) {
 						d.reject(e)
 					})
-          break;
+					break;
 
-        case "query":
-          try {
+					case "query":
+					try {
 						memory.hitNum = statedData ? statedData.hitNum : 0;
-            recallMemory(sender, memory.context, false, memory.hitNum)
+						recallMemory(sender, memory.context, false, memory.hitNum)
 						.then(function() {
 							d.resolve(memory)
 						}).catch(function(e) {
 							d.reject(e)
 						})
-          } catch (e) {
+					} catch (e) {
 						console.log(e);
-            d.reject(e)
-          }
-          break;
+						d.reject(e)
+					}
+					break;
 
-				case "setTask.URL":
+					case "setTask.URL":
 					try {
 						memory.reminderRecipient = sender;
 						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
@@ -906,18 +924,17 @@ function intentConfidence(sender, message, statedData) {
 							C[sender].lastAction = memory;
 							const quickReplies = [
 								{
-					        content_type: "text",
-					        title: "⏱ Date/time",
-					        payload: "CORRECTION_GET_DATETIME"
-					      },
-					      {
-					        content_type: "text",
-					        title: "📂 Just store",
-					        payload: "CORRECTION_STORE"
-					      }
+									content_type: "text",
+									title: "🖥 URL",
+									payload: "CORRECTION_GET_URL"
+								},
+								{
+									content_type: "text",
+									title: "📂 Just store",
+									payload: "CORRECTION_STORE"
+								}
 							];
-							sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store a memory for later?", 0, quickReplies)
-							// .then() ???
+							sendTextMessage(sender, "Just to check - did you want me to remind you when you go to a certain URL, or just store a memory for later?", 0, quickReplies)
 							d.resolve(memory);
 						}
 					} catch(e) {
@@ -926,10 +943,10 @@ function intentConfidence(sender, message, statedData) {
 					}
 					break;
 
-				case "setTask.dateTime":
+					case "setTask.dateTime":
 					try {
 						memory.reminderRecipient = sender;
-						var dateTime = memory.entities.time || memory.entities.date || memory.entities['date-time'];
+						var dateTime = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
 						console.log('dateTime');
 						console.log(dateTime);
 						if (dateTime) {
@@ -951,17 +968,18 @@ function intentConfidence(sender, message, statedData) {
 							C[sender].lastAction = memory;
 							const quickReplies = [
 								{
-					        content_type: "text",
-					        title: "🖥 URL",
-					        payload: "CORRECTION_GET_URL"
-					      },
-					      {
-					        content_type: "text",
-					        title: "📂 Just store",
-					        payload: "CORRECTION_STORE"
-					      }
+									content_type: "text",
+									title: "⏱ Date/time",
+									payload: "CORRECTION_GET_DATETIME"
+								},
+								{
+									content_type: "text",
+									title: "📂 Just store",
+									payload: "CORRECTION_STORE"
+								}
 							];
-							sendTextMessage(sender, "Just to check - did you want me to remind you when you go to a certain URL, or just store a memory for later?", 0, quickReplies)
+							sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store a memory for later?", 0, quickReplies)
+							// .then() ???
 							d.resolve(memory);
 						}
 					} catch(e) {
@@ -970,7 +988,7 @@ function intentConfidence(sender, message, statedData) {
 					}
 					break;
 
-				case "provideDateTime":
+					case "provideDateTime":
 					try {
 						var dateTime = memory.entities.time || memory.entities.date || memory.entities['date-time'];
 						console.log('dateTime');
@@ -988,7 +1006,7 @@ function intentConfidence(sender, message, statedData) {
 						console.log(memory);
 						schedule.scheduleJob(memory.triggerDateTime, function(){
 							sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
-						  console.log('Reminder!', memory.actionSentence);
+							console.log('Reminder!', memory.actionSentence);
 						});
 						d.resolve(memory)
 					} catch(e) {
@@ -997,7 +1015,7 @@ function intentConfidence(sender, message, statedData) {
 					}
 					break;
 
-				case "provideUrl":
+					case "provideUrl":
 					try {
 						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
 						console.log('memory.triggerUrl');
@@ -1024,47 +1042,51 @@ function intentConfidence(sender, message, statedData) {
 					}
 					break;
 
-        default:
-					searchDb(AlgoliaIndex, {query: message, hitsPerPage: 10})
-					.then(function(content) {
-						console.log(content);
-						const elements = content.hits.map(function(card) {
-							return {
-								title: card.sentence,
-								subtitle: 'Click for more',
-								image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://zdnet3.cbsistatic.com/hub/i/r/2012/12/07/8352c981-1d11-11e4-8c7f-00505685119a/thumbnail/770x578/850c62c43a4c2f5908af32c22d3c3377/lightbulb-m2m.jpg'
-							}
+					default:
+					searchDb(AlgoliaIndex,
+						{
+							query: message,
+							userID: sender,
+							hitsPerPage: 10
 						})
-						console.log(elements);
-						sendCarouselMessage(sender, elements, 0, [])
-					}).catch(function(e) {
-						console.log(e);
-						sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
-						d.reject(e)
-					})
-          break;
+						.then(function(content) {
+							console.log(content);
+							const elements = content.hits.map(function(card) {
+								return {
+									title: card.sentence,
+									subtitle: 'Click for more',
+									image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://zdnet3.cbsistatic.com/hub/i/r/2012/12/07/8352c981-1d11-11e4-8c7f-00505685119a/thumbnail/770x578/850c62c43a4c2f5908af32c22d3c3377/lightbulb-m2m.jpg'
+								}
+							})
+							console.log(elements);
+							sendCarouselMessage(sender, elements, 0, [])
+						}).catch(function(e) {
+							console.log(e);
+							sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
+							d.reject(e)
+						})
+						break;
 
-      }
-    }
-	});
-
-	apiaiRequest.on('error', function(e) {
-		console.log(e);
-		if (C.consecutiveWitErrorCount < 5) {
-			console.log(2);
-			setTimeout(function() {
-				C.consecutiveWitErrorCount++;
-				console.log('Assuming Wit error - trying again in 5 seconds (attempt #' + C.consecutiveWitErrorCount + ' of 5) ...');
-				intentConfidence(sender, message, statedData)
-			}, 5000)
-		} else {
-			console.log('Giving up');
-			sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
-			d.reject()
+					}
+				}
+    } else {
+			console.log(e);
+			if (C.consecutiveWitErrorCount < 5) {
+				console.log(2);
+				setTimeout(function() {
+					C.consecutiveWitErrorCount++;
+					console.log('Assuming Wit error - trying again in 5 seconds (attempt #' + C.consecutiveWitErrorCount + ' of 5) ...');
+					intentConfidence(sender, message, statedData)
+				}, 5000)
+			} else {
+				console.log('Giving up');
+				sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
+				d.reject()
+			}
 		}
-	});
+	}
 
-	apiaiRequest.end();
+	request(options, callback);
 
 	return d.promise
 }
