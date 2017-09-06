@@ -274,10 +274,12 @@ exports.handleMessage = function(req, res) {
 
 						case "CORRECTION_GET_DATETIME":
 							sendTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
+							// C[sender].incomingIntent = 'provideDateTime'
 							break;
 
 						case "CORRECTION_GET_URL":
 							sendTextMessage(sender, "Sure thing - what's the url?", 0, []);
+							// C[sender].incomingIntent = 'provideUrl'
 							break;
 
 						case "PREPARE_ATTACHMENT":
@@ -331,7 +333,7 @@ exports.handleMessage = function(req, res) {
 								console.log(0.25, sender, memory);
 								console.log('------');
 								C[sender].lastAction = memory;
-								if (memory.intent == 'storeMemory' || memory.intent == 'setTask.URL' || (memory.intent == 'setTask.dateTime' && memory.triggerDateTime)) {
+								if (memory.intent == 'storeMemory' || (memory.intent == 'setTask.URL' && memory.triggerUrl) || (memory.intent == 'setTask.dateTime' && memory.triggerDateTime)) {
 									sendResponseMessage(sender, memory)
 								}
 							}).catch(function(e) {
@@ -834,7 +836,7 @@ function intentConfidence(sender, message, statedData) {
 	    'Authorization': 'Bearer bdeba24b4bcf40feb24a1b8c1f86f3f3'
 	};
 
-	const dataString = '{\'query\':\'' + message + '\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\'}';
+	const dataString = "{\'query\':\'" + message.replace(/\'/g, '\\\'') + "\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\' }";
 
 	const options = {
 	    url: 'https://api.api.ai/v1/query?v=20150910',
@@ -867,7 +869,7 @@ function intentConfidence(sender, message, statedData) {
 			console.log(memory);
 			console.log(JSON.stringify(memory));
 			try {
-				memory.intent = (statedData && statedData.intent) || data.metadata.intentName;
+				memory.intent = (statedData && statedData.intent) || C[sender].incomingIntent || data.metadata.intentName;
 				console.log(memory);
 			} catch(e) {
 				//This should start figuring out the intent instead of giving up!
@@ -877,179 +879,179 @@ function intentConfidence(sender, message, statedData) {
 			if (memory.intent) {
 				switch(memory.intent) {
 					case "nextResult":
-					tryAnotherMemory(sender);
-					break;
-					case "storeMemory":
-					storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
-					.then(function() {
-						d.resolve(memory)
-					}).catch(function(e) {
-						d.reject(e)
-					})
-					break;
-
-					case "query":
-					try {
-						memory.hitNum = statedData ? statedData.hitNum : 0;
-						recallMemory(sender, memory.context, false, memory.hitNum)
+						tryAnotherMemory(sender);
+						break;
+						case "storeMemory":
+						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 						.then(function() {
 							d.resolve(memory)
 						}).catch(function(e) {
 							d.reject(e)
 						})
-					} catch (e) {
-						console.log(e);
-						d.reject(e)
-					}
-					break;
+						break;
 
-					case "setTask.URL":
-					try {
-						memory.reminderRecipient = sender;
-						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
-						if (memory.triggerUrl) {
-							memory.triggerUrl = memory.triggerUrl[0]
-							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-							console.log('memory', memory);
-							storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
+						case "query":
+						try {
+							memory.hitNum = statedData ? statedData.hitNum : 0;
+							recallMemory(sender, memory.context, false, memory.hitNum)
 							.then(function() {
-								console.log('------');
-								console.log(1, sender, memory);
-								console.log('------');
 								d.resolve(memory)
 							}).catch(function(e) {
 								d.reject(e)
 							})
-						} else {
-							C[sender].lastAction = memory;
-							const quickReplies = [
-								{
-									content_type: "text",
-									title: "🖥 URL",
-									payload: "CORRECTION_GET_URL"
-								},
-								{
-									content_type: "text",
-									title: "📂 Just store",
-									payload: "CORRECTION_STORE"
-								}
-							];
-							sendTextMessage(sender, "Just to check - did you want me to remind you when you go to a certain URL, or just store a memory for later?", 0, quickReplies)
-							d.resolve(memory);
+						} catch (e) {
+							console.log(e);
+							d.reject(e)
 						}
-					} catch(e) {
-						console.log(e);
-						d.reject(e)
-					}
-					break;
+						break;
+
+					case "setTask.URL":
+						try {
+							memory.reminderRecipient = sender;
+							memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
+							if (memory.triggerUrl) {
+								memory.triggerUrl = memory.triggerUrl[0]
+								memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+								console.log('memory', memory);
+								storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
+								.then(function() {
+									console.log('------');
+									console.log(1, sender, memory);
+									console.log('------');
+									d.resolve(memory)
+								}).catch(function(e) {
+									d.reject(e)
+								})
+							} else {
+								C[sender].lastAction = memory;
+								const quickReplies = [
+									{
+										content_type: "text",
+										title: "🖥 URL",
+										payload: "CORRECTION_GET_URL"
+									},
+									{
+										content_type: "text",
+										title: "📂 Just store",
+										payload: "CORRECTION_STORE"
+									}
+								];
+								sendTextMessage(sender, "Just to check - did you want me to remind you when you go to a certain URL, or just store a memory for later?", 0, quickReplies)
+								d.resolve(memory);
+							}
+						} catch(e) {
+							console.log(e);
+							d.reject(e)
+						}
+						break;
 
 					case "setTask.dateTime":
-					try {
-						memory.reminderRecipient = sender;
-						var dateTime = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
-						console.log('dateTime');
-						console.log(dateTime);
-						if (dateTime) {
-							dateTime = dateTime[0]
+						try {
+							memory.reminderRecipient = sender;
+							var dateTime = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
+							console.log('dateTime');
+							console.log(dateTime);
+							if (dateTime) {
+								dateTime = dateTime[0]
+								memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
+								memory.triggerDateTime = new Date(memory.triggerDateTime);
+								memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
+								memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+								console.log('memory');
+								console.log(memory);
+								storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
+								.then(function() {
+									scheduleReminder(memory);
+									d.resolve(memory)
+								}).catch(function(e) {
+									d.reject(e)
+								})
+							} else {
+								C[sender].lastAction = memory;
+								const quickReplies = [
+									{
+										content_type: "text",
+										title: "⏱ Date/time",
+										payload: "CORRECTION_GET_DATETIME"
+									},
+									{
+										content_type: "text",
+										title: "📂 Just store",
+										payload: "CORRECTION_STORE"
+									}
+								];
+								sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store a memory for later?", 0, quickReplies)
+								// .then() ???
+								d.resolve(memory);
+							}
+						} catch(e) {
+							console.log(e);
+							d.reject(e)
+						}
+						break;
+
+					case "provideDateTime":
+						try {
+							var dateTime = memory.entities.time || memory.entities.date || memory.entities['date-time'];
+							console.log('dateTime');
+							console.log(dateTime);
+							dateTime = dateTime[0];
+							memory.intent = C[sender].lastAction.intent;
+							memory.context = C[sender].lastAction.context;
+							memory.entities = C[sender].lastAction.entities;
+							memory.sentence = C[sender].lastAction.sentence;
 							memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 							memory.triggerDateTime = new Date(memory.triggerDateTime);
 							memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
 							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory');
 							console.log(memory);
+							schedule.scheduleJob(memory.triggerDateTime, function(){
+								sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
+								console.log('Reminder!', memory.actionSentence);
+							});
+							d.resolve(memory)
+						} catch(e) {
+							console.log(e);
+							d.reject(e)
+						}
+						break;
+
+					case "provideUrl":
+						try {
+							memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
+							console.log('memory.triggerUrl');
+							console.log(memory.triggerUrl);
+							memory.triggerUrl = memory.triggerUrl[0]
+							memory.intent = C[sender].lastAction.intent;
+							memory.context = C[sender].lastAction.context;
+							memory.entities = C[sender].lastAction.entities;
+							memory.sentence = C[sender].lastAction.sentence;
+							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+							console.log('memory', memory);
 							storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
 							.then(function() {
-								scheduleReminder(memory);
+								console.log('------');
+								console.log(1.1, sender, memory);
+								console.log('------');
 								d.resolve(memory)
 							}).catch(function(e) {
 								d.reject(e)
 							})
-						} else {
-							C[sender].lastAction = memory;
-							const quickReplies = [
-								{
-									content_type: "text",
-									title: "⏱ Date/time",
-									payload: "CORRECTION_GET_DATETIME"
-								},
-								{
-									content_type: "text",
-									title: "📂 Just store",
-									payload: "CORRECTION_STORE"
-								}
-							];
-							sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store a memory for later?", 0, quickReplies)
-							// .then() ???
-							d.resolve(memory);
-						}
-					} catch(e) {
-						console.log(e);
-						d.reject(e)
-					}
-					break;
-
-					case "provideDateTime":
-					try {
-						var dateTime = memory.entities.time || memory.entities.date || memory.entities['date-time'];
-						console.log('dateTime');
-						console.log(dateTime);
-						dateTime = dateTime[0];
-						memory.intent = C[sender].lastAction.intent;
-						memory.context = C[sender].lastAction.context;
-						memory.entities = C[sender].lastAction.entities;
-						memory.sentence = C[sender].lastAction.sentence;
-						memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
-						memory.triggerDateTime = new Date(memory.triggerDateTime);
-						memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
-						memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-						console.log('memory');
-						console.log(memory);
-						schedule.scheduleJob(memory.triggerDateTime, function(){
-							sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
-							console.log('Reminder!', memory.actionSentence);
-						});
-						d.resolve(memory)
-					} catch(e) {
-						console.log(e);
-						d.reject(e)
-					}
-					break;
-
-					case "provideUrl":
-					try {
-						memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
-						console.log('memory.triggerUrl');
-						console.log(memory.triggerUrl);
-						memory.triggerUrl = memory.triggerUrl[0]
-						memory.intent = C[sender].lastAction.intent;
-						memory.context = C[sender].lastAction.context;
-						memory.entities = C[sender].lastAction.entities;
-						memory.sentence = C[sender].lastAction.sentence;
-						memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-						console.log('memory', memory);
-						storeMemory(sender, memory, expectAttachment, allowAttachment, statedData)
-						.then(function() {
-							console.log('------');
-							console.log(1.1, sender, memory);
-							console.log('------');
-							d.resolve(memory)
-						}).catch(function(e) {
+						} catch(e) {
+							console.log(e);
 							d.reject(e)
-						})
-					} catch(e) {
-						console.log(e);
-						d.reject(e)
-					}
-					break;
+						}
+						break;
 
 					default:
-					searchDb(AlgoliaIndex,
-						{
-							query: message,
-							userID: sender,
-							hitsPerPage: 10
-						})
-						.then(function(content) {
+						searchDb(AlgoliaIndex,
+							{
+								query: message,
+								userID: sender,
+								hitsPerPage: 10
+							}
+						).then(function(content) {
 							console.log(content);
 							const elements = content.hits.map(function(card) {
 								return {
@@ -1066,11 +1068,10 @@ function intentConfidence(sender, message, statedData) {
 							d.reject(e)
 						})
 						break;
-
-					}
 				}
+			}
     } else {
-			console.log(e);
+			console.log(error);
 			if (C.consecutiveWitErrorCount < 5) {
 				console.log(2);
 				setTimeout(function() {
