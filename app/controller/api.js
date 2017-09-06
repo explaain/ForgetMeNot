@@ -689,7 +689,7 @@ function sendCorrectionMessage(recipientId) {
 			messageData.message.quick_replies = [
 	      {
 	        content_type: "text",
-	        title: "💬 Store a memory",
+	        title: "💬 Store this memory",
 	        payload: "CORRECTION_STORE"
 	      },
 	      {
@@ -936,7 +936,7 @@ function intentConfidence(sender, message, statedData) {
 										payload: "CORRECTION_STORE"
 									}
 								];
-								sendTextMessage(sender, "Just to check - did you want me to remind you when you go to a certain URL, or just store a memory for later?", 0, quickReplies)
+								sendTextMessage(sender, "Just to check - did you want me to remind you when you go to a certain URL, or just store this memory for later?", 0, quickReplies)
 								d.resolve(memory);
 							}
 						} catch(e) {
@@ -955,6 +955,8 @@ function intentConfidence(sender, message, statedData) {
 								dateTime = dateTime[0]
 								memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 								memory.triggerDateTime = new Date(memory.triggerDateTime);
+								if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'])
+									memory.triggerDateTime = memory.triggerDateTime + 3600000
 								memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
 								memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 								console.log('memory');
@@ -980,7 +982,7 @@ function intentConfidence(sender, message, statedData) {
 										payload: "CORRECTION_STORE"
 									}
 								];
-								sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store a memory for later?", 0, quickReplies)
+								sendTextMessage(sender, "Just to check - did you want me to remind you at a certain date or time, or just store this memory for later?", 0, quickReplies)
 								// .then() ???
 								d.resolve(memory);
 							}
@@ -1002,6 +1004,8 @@ function intentConfidence(sender, message, statedData) {
 							memory.sentence = C[sender].lastAction.sentence;
 							memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
 							memory.triggerDateTime = new Date(memory.triggerDateTime);
+							if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'])
+								memory.triggerDateTime = memory.triggerDateTime + 3600000
 							memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
 							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory');
@@ -1046,28 +1050,15 @@ function intentConfidence(sender, message, statedData) {
 						break;
 
 					default:
-						searchDb(AlgoliaIndex,
-							{
-								query: message,
-								userID: sender,
-								hitsPerPage: 10
-							}
-						).then(function(content) {
-							console.log(content);
-							const elements = content.hits.map(function(card) {
-								return {
-									title: card.sentence,
-									subtitle: 'Click for more',
-									image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://zdnet3.cbsistatic.com/hub/i/r/2012/12/07/8352c981-1d11-11e4-8c7f-00505685119a/thumbnail/770x578/850c62c43a4c2f5908af32c22d3c3377/lightbulb-m2m.jpg'
-								}
-							})
-							console.log(elements);
-							sendCarouselMessage(sender, elements, 0, [])
-						}).catch(function(e) {
-							console.log(e);
+						if (memory.intent && memory.intent != 'Default Fallback Intent') {
 							sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
-							d.reject(e)
-						})
+						} else {
+							d.reject()
+							// }).catch(function(e) {
+							// 	console.log(e);
+							// 	sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
+							// })
+						}
 						break;
 				}
 			}
@@ -1081,9 +1072,28 @@ function intentConfidence(sender, message, statedData) {
 					intentConfidence(sender, message, statedData)
 				}, 5000)
 			} else {
-				console.log('Giving up');
-				sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
-				d.reject(error)
+				searchDb(AlgoliaIndex,
+					{
+						query: message,
+						userID: sender,
+						hitsPerPage: 10
+					}
+				).then(function(content) {
+					console.log(content);
+					const elements = content.hits.map(function(card) {
+						return {
+							title: card.sentence,
+							subtitle: ' ',
+							image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://zdnet3.cbsistatic.com/hub/i/r/2012/12/07/8352c981-1d11-11e4-8c7f-00505685119a/thumbnail/770x578/850c62c43a4c2f5908af32c22d3c3377/lightbulb-m2m.jpg'
+						}
+					})
+					console.log(elements);
+					sendCarouselMessage(sender, elements, 0, [])
+					// d.resolve()
+					// console.log('Giving up');
+					// sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
+					// d.reject(error)
+				});
 			}
 		}
 	}
