@@ -51,8 +51,6 @@ const rescheduleAllReminders = function() {
 	searchDb(AlgoliaIndex, searchParams)
 	.then(function(content) {
 		const reminders = content.hits
-		console.log('reminders')
-		console.log(reminders)
 		reminders.forEach(function(r) {
 			scheduleReminder(r);
 		})
@@ -868,15 +866,20 @@ function intentConfidence(sender, message, statedData) {
 			console.log('memory');
 			console.log(memory);
 			console.log(JSON.stringify(memory));
+			console.log(11111);
 			try {
 				memory.intent = (statedData && statedData.intent) || C[sender].incomingIntent || data.metadata.intentName;
+				console.log(22222);
 				console.log(memory);
+				console.log(33333);
 			} catch(e) {
+				console.log(44444);
 				//This should start figuring out the intent instead of giving up!
 				d.reject(e)
 			}
 
 			if (memory.intent) {
+				console.log(55555);
 				switch(memory.intent) {
 					case "nextResult":
 						tryAnotherMemory(sender);
@@ -1050,10 +1053,14 @@ function intentConfidence(sender, message, statedData) {
 						break;
 
 					default:
+						console.log(66666);
 						if (memory.intent && memory.intent != 'Default Fallback Intent') {
+							console.log('defaulting');
+							console.log(memory.intent);
 							sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
 						} else {
-							d.reject()
+							tryCarousel(sender, message)
+							// d.reject()
 							// }).catch(function(e) {
 							// 	console.log(e);
 							// 	sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
@@ -1063,6 +1070,7 @@ function intentConfidence(sender, message, statedData) {
 				}
 			}
     } else {
+			console.log('else!!');
 			console.log(error);
 			if ( /* C.consecutiveWitErrorCount < 5 */ false) {
 				console.log(2);
@@ -1072,28 +1080,12 @@ function intentConfidence(sender, message, statedData) {
 					intentConfidence(sender, message, statedData)
 				}, 5000)
 			} else {
-				searchDb(AlgoliaIndex,
-					{
-						query: message,
-						userID: sender,
-						hitsPerPage: 10
-					}
-				).then(function(content) {
-					console.log(content);
-					const elements = content.hits.map(function(card) {
-						return {
-							title: card.sentence,
-							subtitle: ' ',
-							image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://zdnet3.cbsistatic.com/hub/i/r/2012/12/07/8352c981-1d11-11e4-8c7f-00505685119a/thumbnail/770x578/850c62c43a4c2f5908af32c22d3c3377/lightbulb-m2m.jpg'
-						}
-					})
-					console.log(elements);
-					sendCarouselMessage(sender, elements, 0, [])
+				tryCarousel(sender, message)
 					// d.resolve()
 					// console.log('Giving up');
 					// sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
 					// d.reject(error)
-				});
+				// });
 			}
 		}
 	}
@@ -1186,6 +1178,38 @@ const scheduleReminder = function(memory) {
 		sendTextMessage(memory.reminderRecipient || memory.userID, '🔔 Reminder! ' + memory.actionSentence)
 		console.log('Reminder!', memory.actionSentence);
 	});
+}
+
+
+const tryCarousel = function(sender, message, cards) {
+	const d = Q.defer()
+	searchDb(AlgoliaIndex,
+		{
+			query: message,
+			userID: sender,
+			hitsPerPage: 10
+		}
+	).then(function(content) {
+		console.log(content);
+		if (content.hits.length) {
+			const elements = content.hits.map(function(card) {
+				return {
+					title: card.sentence,
+					subtitle: ' ',
+					image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://res.cloudinary.com/forgetmenot/image/upload/v1504715822/carousel_sezreg.png'
+				}
+			})
+			console.log(elements);
+			sendCarouselMessage(sender, elements, 0, [])
+			.then(function() {
+				d.resolve()
+			})
+		} else {
+			console.log('rejecting carousel');
+			d.reject();
+		}
+	});
+	return d.promise
 }
 // -------------------------------------------- //
 
