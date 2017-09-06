@@ -825,10 +825,10 @@ function intentConfidence(sender, message, statedData) {
 	console.log(intentConfidence);
 	console.log('message');
 	console.log(message);
-	const messageToApiai = message.substring(0, 256); // Only sends API.AI the first 256 characters as it can't handle more than that
-	const apiaiRequest = apiaiApp.textRequest(messageToApiai, {
-    sessionId: 'forgetmenot',
-	});
+	const messageToApiai = message.substring(0, 256).replace(/\'/g, '\\\''); // Only sends API.AI the first 256 characters as it can't handle more than that
+	// const apiaiRequest = apiaiApp.textRequest(messageToApiai, {
+  //   sessionId: 'forgetmenot',
+	// });
 
 
 	const headers = {
@@ -836,7 +836,7 @@ function intentConfidence(sender, message, statedData) {
 	    'Authorization': 'Bearer bdeba24b4bcf40feb24a1b8c1f86f3f3'
 	};
 
-	const dataString = "{\'query\':\'" + message.replace(/\'/g, '\\\'') + "\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\' " + (C[sender].apiaiContext ? "" : "") + " }";
+	const dataString = "{\'query\':\'" + messageToApiai + "\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\' " + (C[sender].apiaiContext ? "" : "") + " }";
 
 	const options = {
 	    url: 'https://api.api.ai/v1/query?v=20150910',
