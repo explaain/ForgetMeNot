@@ -1089,7 +1089,6 @@ function intentConfidence(sender, message, statedData) {
 	}
 
 	request(options, callback);
-	request.end();
 
 	return d.promise
 }
@@ -1674,7 +1673,7 @@ function setLocation(sender) {
 
 function rewriteSentence(sentence) { // Currently very primitive!
 	console.log(rewriteSentence);
-	sentence = sentence.trim();
+	sentence = sentence.trim().replace(/’/g, '\'');
   const remove = [
     /^Remember that /i,
     /^Remember /i,
