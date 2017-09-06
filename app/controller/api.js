@@ -1370,14 +1370,17 @@ function searchDb(index, params) {
 		if (err) {
 			d.reject(err)
 		} else {
-		console.log('\n\n');
+			console.log('\n\n');
 			console.log('--- Algolia Search Hits ---');
 			console.log(content.hits.map(function(hit) {
 				return hit.sentence
 			}));
 			console.log('\n\n');
 			// console.log(JSON.stringify(content.hits));
-			d.resolve(content);
+			fetchListItemCards(content.hits)
+			.then(function() {
+				d.resolve(content);
+			})
 		}
 	});
 	return d.promise;
@@ -1436,6 +1439,40 @@ function deleteFromDb(sender, objectID) {
 }
 
 
+const fetchListItemCards = function(cards) {
+  const d = Q.defer()
+  const self = this
+  const promises = []
+  cards.forEach(function(card) {
+    card.listCards = {}
+    if (card.listItems) {
+      card.listItems.forEach(function(key) {
+        const p = Q.defer()
+        getDbObject(AlgoliaIndex, key)
+        .then(function(content) {
+          card.listCards[key] = content;
+					console.log(content);
+					console.log(card);
+					console.log(JSON.stringify(card));
+          p.resolve(content);
+        })
+        promises.push(p.promise)
+      })
+    }
+  })
+  console.log(promises);
+  Q.allSettled(promises)
+  .then(function(results) {
+    d.resolve(results);
+  }).catch(function(e) {
+    console.log(e);
+    d.reject(e)
+  })
+  return d.promise
+}
+
+
+
 function recallMemory(sender, context, attachments, hitNum) {
 	console.log(recallMemory);
 	const d = Q.defer()
@@ -1478,6 +1515,14 @@ function sendResult(sender, memory, confirmation) {
 	const d = Q.defer()
 	console.log(sendResult);
 	var sentence = confirmation ? memory.confirmationSentence : memory.sentence;
+	if (memory.listItems) {
+		sentence += '\n\n' + memory.listItems.map(function(key) {
+			const card = memory.listCards[key]
+			const text = card.sentence
+			const words = card.entities['noun'] || card.entities['action-noun'] || card.entities['verb'] || card.entities['action-verb']
+			return (emoji.translate(words ? words.join(' ') : '', true).substring(0,2) || '✅') + ' ' + text
+		}).join('\n')
+	}
 	if (memory.attachments) {
 		if (~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence = sentence.substring(0, sentence.length - 1);;
 		sentence+=" ⬇️";
