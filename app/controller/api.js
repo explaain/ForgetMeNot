@@ -576,6 +576,45 @@ function sendTextMessage(recipientId, messageText, delay, quickReplies) {
 	}
   return prepareAndSendMessages(messageData, delay)
 }
+function sendCarouselMessage(recipientId, elements, delay, quickReplies) {
+	console.log(sendCarouselMessage);
+	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
+	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+		message: {
+			attachment: {
+				type: 'template',
+				payload: {
+					template_type: 'generic',
+					elements: elements
+				}
+			}
+		}
+  };
+	if (!quickReplies || quickReplies.length) {
+		messageData.message.quick_replies = quickReplies || [
+			{
+        content_type: "text",
+        title: "😍",
+        payload: "USER_FEEDBACK_TOP"
+      },
+      {
+        content_type: "text",
+        title: "😐",
+        payload: "USER_FEEDBACK_MIDDLE"
+      },
+      {
+        content_type: "text",
+        title: "😔",
+        payload: "USER_FEEDBACK_BOTTOM"
+      }
+		];
+	}
+  return prepareAndSendMessages(messageData, delay)
+}
 function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
 	console.log(sendAttachmentMessage);
 	const messageAttachment = attachment.attachment_id ? {
@@ -986,7 +1025,22 @@ function intentConfidence(sender, message, statedData) {
 					break;
 
         default:
-					sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
+					searchDb(AlgoliaIndex, {query: message})
+					.then(function(content) {
+						console.log(content);
+						const elements = content.hits.map(function(card) {
+							return {
+								title: card.sentence,
+								image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://support.yumpu.com/en/wp-content/themes/qaengine/img/default-thumbnail.jpg'
+							}
+						})
+						console.log(elements);
+						sendCarouselMessage(sender, elements, 0, [])
+					}).catch(function(e) {
+						console.log(e);
+						sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
+						d.reject(e)
+					})
           break;
 
       }
