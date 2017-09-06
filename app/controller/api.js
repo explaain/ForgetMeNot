@@ -1025,13 +1025,14 @@ function intentConfidence(sender, message, statedData) {
 					break;
 
         default:
-					searchDb(AlgoliaIndex, {query: message})
+					searchDb(AlgoliaIndex, {query: message, hitsPerPage: 10})
 					.then(function(content) {
 						console.log(content);
 						const elements = content.hits.map(function(card) {
 							return {
 								title: card.sentence,
-								image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://support.yumpu.com/en/wp-content/themes/qaengine/img/default-thumbnail.jpg'
+								subtitle: 'Click for more',
+								image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://zdnet3.cbsistatic.com/hub/i/r/2012/12/07/8352c981-1d11-11e4-8c7f-00505685119a/thumbnail/770x578/850c62c43a4c2f5908af32c22d3c3377/lightbulb-m2m.jpg'
 							}
 						})
 						console.log(elements);
