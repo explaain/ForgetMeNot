@@ -274,12 +274,12 @@ exports.handleMessage = function(req, res) {
 
 						case "CORRECTION_GET_DATETIME":
 							sendTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
-							// C[sender].incomingIntent = 'provideDateTime'
+							// C[sender].apiaiContext = 'provideDateTime'
 							break;
 
 						case "CORRECTION_GET_URL":
 							sendTextMessage(sender, "Sure thing - what's the url?", 0, []);
-							// C[sender].incomingIntent = 'provideUrl'
+							// C[sender].apiaiContext = 'provideURL'
 							break;
 
 						case "PREPARE_ATTACHMENT":
@@ -836,7 +836,7 @@ function intentConfidence(sender, message, statedData) {
 	    'Authorization': 'Bearer bdeba24b4bcf40feb24a1b8c1f86f3f3'
 	};
 
-	const dataString = "{\'query\':\'" + message.replace(/\'/g, '\\\'') + "\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\' }";
+	const dataString = "{\'query\':\'" + message.replace(/\'/g, '\\\'') + "\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\' " + (C[sender].apiaiContext ? "" : "") + " }";
 
 	const options = {
 	    url: 'https://api.api.ai/v1/query?v=20150910',
@@ -1017,7 +1017,8 @@ function intentConfidence(sender, message, statedData) {
 						}
 						break;
 
-					case "provideUrl":
+					case "provideURL":
+						console.log('hello');
 						try {
 							memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
 							console.log('memory.triggerUrl');
@@ -1072,7 +1073,7 @@ function intentConfidence(sender, message, statedData) {
 			}
     } else {
 			console.log(error);
-			if (C.consecutiveWitErrorCount < 5) {
+			if ( /* C.consecutiveWitErrorCount < 5 */ false) {
 				console.log(2);
 				setTimeout(function() {
 					C.consecutiveWitErrorCount++;
@@ -1082,12 +1083,13 @@ function intentConfidence(sender, message, statedData) {
 			} else {
 				console.log('Giving up');
 				sendTextMessage(sender, 'Sorry, something went wrong - can you try again?')
-				d.reject()
+				d.reject(error)
 			}
 		}
 	}
 
 	request(options, callback);
+	request.end();
 
 	return d.promise
 }
@@ -1597,8 +1599,7 @@ function sendResult(sender, memory, confirmation) {
 		sentence += '\n\n' + memory.listItems.map(function(key) {
 			const card = memory.listCards[key]
 			const text = card.sentence
-			const words = card.entities['noun'] || card.entities['action-noun'] || card.entities['verb'] || card.entities['action-verb']
-			return (emoji.translate(words ? words.join(' ') : '', true).substring(0,2) || '✅') + ' ' + text
+			return getEmojis(text, card.entities, 1, true) + ' ' + text
 		}).join('\n')
 	}
 	if (memory.attachments) {
@@ -1727,8 +1728,7 @@ const getActionSentence = function(sentence, context) {
 	console.log(end);
 	const text = rewriteSentence(sentence.substring(start, end+1))
 	console.log(text);
-	console.log(emoji.translate(text, true));
-	return (emoji.translate(text, true) || '✅') + ' ' + text;
+	return getEmojis(text) + ' ' + text;
 }
 
 /* Now returns both context and all the other bits (except intent) */
@@ -1816,6 +1816,15 @@ function splitChunk(message, limit) {
 	shortened = shortened.trim().replace(/^\s+|\s+$/g, '').trim();
 	remaining = remaining.trim().replace(/^\s+|\s+$/g, '').trim();
 	return [shortened, remaining];
+}
+
+const getEmojis = function(text, entities, max, strict) {
+	if (strict) {
+		const words = entities['noun'] || entities['action-noun'] || entities['verb'] || entities['action-verb']
+		if (words) text = words.join(' ')
+	}
+
+	return (emoji.translate(text, true).substring(0, 2) || '✅')
 }
 
 
