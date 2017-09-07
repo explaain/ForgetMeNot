@@ -716,6 +716,9 @@ function sendCorrectionMessage(recipientId) {
 					payload: "CORRECTION_STORE"
 				},
 			];
+			if (C[sender].lastAction.failed) {
+				messageData.message.quick_replies = [messageData.message.quick_replies[2]]
+			}
 			break;
 	}
   return prepareAndSendMessages(messageData);
@@ -1080,6 +1083,11 @@ function intentConfidence(sender, message, statedData) {
 							sendGenericMessage(sender, memory.intent, C[sender].consecutiveFails );
 						} else {
 							tryCarousel(sender, message)
+							.then(function() {
+
+							}).catch(function(e) {
+								giveUp(sender);
+							})
 							// d.reject()
 							// }).catch(function(e) {
 							// 	console.log(e);
@@ -1632,6 +1640,7 @@ function recallMemory(sender, memory, attachments, hitNum) {
 			.then(function() {
 				return Q.fcall(function() {return null});
 			}).catch(function(e) {
+				memory.failed = true;
 				return sendTextMessage(sender, "Sorry, I can't remember anything" + ((hitNum && hitNum > 0) ? " else" : "") + " similar to that!")
 			})
 		}
