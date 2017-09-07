@@ -1236,7 +1236,10 @@ const tryCarousel = function(sender, message, cards) {
 			console.log('rejecting carousel');
 			d.reject();
 		}
-	});
+	}).catch(function(e) {
+		console.log(e);
+		d.reject()
+	})
 	return d.promise
 }
 // -------------------------------------------- //
