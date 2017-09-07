@@ -336,7 +336,13 @@ exports.handleMessage = function(req, res) {
 								}
 							}).catch(function(e) {
 								console.log(e);
-								giveUp(sender);
+								console.log(1122);
+								tryCarousel(sender, message)
+								.then(function() {
+
+								}).catch(function(e) {
+									giveUp(sender);
+								})
 							})
 						}
 					}
@@ -896,7 +902,7 @@ function intentConfidence(sender, message, statedData) {
 						case "query":
 						try {
 							memory.hitNum = statedData ? statedData.hitNum : 0;
-							recallMemory(sender, memory.context, false, memory.hitNum)
+							recallMemory(sender, memory, false, memory.hitNum)
 							.then(function() {
 								d.resolve(memory)
 							}).catch(function(e) {
@@ -1586,10 +1592,10 @@ const fetchListItemCards = function(cards) {
 
 
 
-function recallMemory(sender, context, attachments, hitNum) {
+function recallMemory(sender, memory, attachments, hitNum) {
 	console.log(recallMemory);
 	const d = Q.defer()
-	const searchTerm = context.map(function(e){return e.value}).join(' ');
+	const searchTerm = memory.context.map(function(e){return e.value}).join(' ');
 	//@TODO: Add in check and create new user if none there
 	return fetchUserData(sender)
 	.then(function(content) {
@@ -1608,7 +1614,12 @@ function recallMemory(sender, context, attachments, hitNum) {
 			C[sender].lastResultTried = 0;
 			return sendResult(sender, content.hits[(hitNum || 0)]);
 		} else {
-			return sendTextMessage(sender, "Sorry, I can't remember anything" + ((hitNum && hitNum > 0) ? " else" : "") + " similar to that!")
+			tryCarousel(sender, memory.sentence)
+			.then(function() {
+				return Q.fcall(function() {return null});
+			}).catch(function(e) {
+				return sendTextMessage(sender, "Sorry, I can't remember anything" + ((hitNum && hitNum > 0) ? " else" : "") + " similar to that!")
+			})
 		}
 	}).then(function() {
 		return C[sender].onboarding ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500, true) : Q.fcall(function() {return null});
