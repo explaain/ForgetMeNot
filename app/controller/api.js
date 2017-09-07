@@ -978,12 +978,25 @@ function intentConfidence(sender, message, statedData) {
 							console.log('dateTime');
 							console.log(dateTime);
 							if (dateTime) {
+								console.log('Calculating memory.triggerDateTime...');
 								dateTime = dateTime[0]
-								memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
-								memory.triggerDateTime = new Date(memory.triggerDateTime);
+								console.log(0, dateTime);
+								dateTime = chrono.parseDate(dateTime) || dateTime;
+								console.log(1, dateTime);
+								var dateTimeNum = dateTime.getTime();
+								console.log(2, dateTimeNum);
 								if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'])
-									memory.triggerDateTime = memory.triggerDateTime + 3600000
-								memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
+									dateTimeNum = dateTimeNum - 3600000
+								console.log(3, dateTimeNum);
+								if (dateTimeNum < new Date().getTime() && dateTimeNum+43200000 > new Date().getTime())
+									dateTimeNum += 43200000;
+								else if (dateTimeNum < new Date().getTime() && dateTimeNum+86400000 > new Date().getTime())
+									dateTimeNum += 86400000;
+								console.log(4, dateTimeNum);
+								memory.triggerDateTimeNumeric = dateTimeNum
+								console.log(5, memory.triggerDateTimeNumeric);
+								memory.triggerDateTime = new Date(dateTimeNum);
+								console.log(6, memory.triggerDateTime);
 								memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 								console.log('memory');
 								console.log(memory);
@@ -1142,7 +1155,7 @@ const sendResponseMessage = function(sender, m) {
 			m.confirmationSentence = "I've now set that reminder for you! 🕓 \n\n"
 			 												+ m.actionSentence + '\n'
 															+ '🗓 ' + m.triggerDateTime.toDateString() + '\n'
-															+ '⏱ ' + m.triggerDateTime.toLocaleTimeString()
+															+ '⏱ ' + m.triggerDateTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'} )
 
 			break;
 
