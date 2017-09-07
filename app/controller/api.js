@@ -236,7 +236,7 @@ exports.handleMessage = function(req, res) {
 						case "CORRECTION_QUERY":
 							deleteFromDb(sender, C[sender].lastAction.objectID)
 							.then(function() {
-								return intentConfidence(sender, text, {intent: 'query'})
+								return intentConfidence(sender, C[sender].lastAction.sentence, {intent: 'query'})
 							}).then(function(memory) {
 								C[sender].lastAction = memory;
 							})
@@ -268,6 +268,15 @@ exports.handleMessage = function(req, res) {
 							}).catch(function(e) {
 								console.log(e);
 							});
+							break;
+
+						case "CORRECTION_CAROUSEL":
+							tryCarousel(sender, C[sender].lastAction.sentence)
+							.then(function() {
+
+							}).catch(function(e) {
+								giveUp(sender);
+							})
 							break;
 
 						case "CORRECTION_GET_DATETIME":
@@ -693,14 +702,19 @@ function sendCorrectionMessage(recipientId) {
 			messageData.message.quick_replies = [
 	      {
 	        content_type: "text",
-	        title: "💬 Store this memory",
-	        payload: "CORRECTION_STORE"
+	        title: "🔀 Recall a different memory",
+	        payload: "CORRECTION_QUERY_DIFFERENT"
 	      },
 	      {
 	        content_type: "text",
-	        title: "🔀 Recall a different memory",
-	        payload: "CORRECTION_QUERY_DIFFERENT"
-	      }
+	        title: "👨‍👩‍👧‍👦 Show me all related memories",
+	        payload: "CORRECTION_CAROUSEL"
+	      },
+				{
+					content_type: "text",
+					title: "💬 Store this memory",
+					payload: "CORRECTION_STORE"
+				},
 			];
 			break;
 	}
