@@ -1050,7 +1050,7 @@ function intentConfidence(sender, message, statedData) {
 					case "provideURL":
 						console.log('hello');
 						try {
-							memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
+							memory.triggerUrl = memory.entities['url'] || memory.entities['website'];
 							console.log('memory.triggerUrl');
 							console.log(memory.triggerUrl);
 							memory.triggerUrl = memory.triggerUrl[0]
