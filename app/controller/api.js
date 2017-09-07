@@ -1609,7 +1609,7 @@ const fetchListItemCards = function(cards) {
 function recallMemory(sender, memory, attachments, hitNum) {
 	console.log(recallMemory);
 	const d = Q.defer()
-	const searchTerm = memory.context.map(function(e){return e.value}).join(' ');
+	const searchTerm = memory.sentence;// memory.context.map(function(e){return e.value}).join(' ');
 	//@TODO: Add in check and create new user if none there
 	return fetchUserData(sender)
 	.then(function(content) {
