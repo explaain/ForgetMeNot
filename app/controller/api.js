@@ -1214,7 +1214,7 @@ const tryCarousel = function(sender, message, cards) {
 	searchDb(AlgoliaIndex,
 		{
 			query: message,
-			userID: sender,
+			filters: 'userID: ' + sender,
 			hitsPerPage: 10
 		}
 	).then(function(content) {
