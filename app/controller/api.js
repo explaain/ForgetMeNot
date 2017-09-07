@@ -974,18 +974,20 @@ function intentConfidence(sender, message, statedData) {
 					case "setTask.dateTime":
 						try {
 							memory.reminderRecipient = sender;
-							var dateTime = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
-							console.log('dateTime');
-							console.log(dateTime);
-							if (dateTime) {
+							var dateTimeOriginal = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
+							console.log('dateTimeOriginal');
+							console.log(dateTimeOriginal);
+							if (dateTimeOriginal) {
 								console.log('Calculating memory.triggerDateTime...');
-								dateTime = dateTime[0]
+								dateTime = dateTimeOriginal[0]
 								console.log(0, dateTime);
 								dateTime = chrono.parseDate(dateTime) || dateTime;
 								console.log(1, dateTime);
 								var dateTimeNum = dateTime.getTime();
 								console.log(2, dateTimeNum);
-								if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'])
+								console.log(dateTimeOriginal.toString());
+								console.log(dateTimeOriginal.toString().length);
+								if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'] && dateTimeOriginal.toString().length > 16)
 									dateTimeNum = dateTimeNum - 3600000
 								console.log(3, dateTimeNum);
 								if (dateTimeNum < new Date().getTime() && dateTimeNum+43200000 > new Date().getTime())
@@ -1033,19 +1035,33 @@ function intentConfidence(sender, message, statedData) {
 
 					case "provideDateTime":
 						try {
-							var dateTime = memory.entities.time || memory.entities.date || memory.entities['date-time'];
-							console.log('dateTime');
-							console.log(dateTime);
-							dateTime = dateTime[0];
+							var dateTimeOriginal = memory.entities.time || memory.entities.date || memory.entities['date-time'];
+							console.log('dateTimeOriginal');
+							console.log(dateTimeOriginal);
 							memory.intent = C[sender].lastAction.intent;
 							memory.context = C[sender].lastAction.context;
 							memory.entities = C[sender].lastAction.entities;
 							memory.sentence = C[sender].lastAction.sentence;
-							memory.triggerDateTime = chrono.parseDate(dateTime) || dateTime;
-							memory.triggerDateTime = new Date(memory.triggerDateTime);
-							if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'])
-								memory.triggerDateTime = memory.triggerDateTime + 3600000
-							memory.triggerDateTimeNumeric = memory.triggerDateTime.getTime();
+							console.log('Calculating memory.triggerDateTime...');
+							dateTime = dateTimeOriginal[0]
+							console.log(0, dateTime);
+							dateTime = chrono.parseDate(dateTime) || dateTime;
+							console.log(1, dateTime);
+							var dateTimeNum = dateTime.getTime();
+							console.log(2, dateTimeNum);
+							console.log(dateTimeOriginal.toString().length);
+							if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'] && dateTimeOriginal.toString().length > 16)
+								dateTimeNum = dateTimeNum - 3600000
+							console.log(3, dateTimeNum);
+							if (dateTimeNum < new Date().getTime() && dateTimeNum+43200000 > new Date().getTime())
+								dateTimeNum += 43200000;
+							else if (dateTimeNum < new Date().getTime() && dateTimeNum+86400000 > new Date().getTime())
+								dateTimeNum += 86400000;
+							console.log(4, dateTimeNum);
+							memory.triggerDateTimeNumeric = dateTimeNum
+							console.log(5, memory.triggerDateTimeNumeric);
+							memory.triggerDateTime = new Date(dateTimeNum);
+							console.log(6, memory.triggerDateTime);
 							memory.actionSentence = getActionSentence(memory.sentence, memory.context)
 							console.log('memory');
 							console.log(memory);
