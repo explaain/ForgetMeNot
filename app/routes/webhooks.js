@@ -1,5 +1,5 @@
 // refactored webhook code
-var apiController = require('../controller/api');
+var apiController = require('../controller/messageHandler');
 
 var express = require('express');
 var router = express.Router();
