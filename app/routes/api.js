@@ -19,7 +19,16 @@ router.post('/memories', function(req, res) {
 		res.status(e.code).send(data)
 	});
 });
-router.delete('/memories', apiController.deleteMemories);
+router.delete('/memories', function(req, res) {
+	const sender = req.query.sender;
+	const objectID = req.query.objectID;
+	apiController.deleteMemories(sender, objectID)
+	.then(function(result) {
+		res.status(200).send(result);
+	}).catch(function(e) {
+		res.sendStatus(400);
+	})
+});
 router.get('/memories', function(req, res) {
   res.status(200).send('Hi there')
 });

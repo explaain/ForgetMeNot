@@ -9,7 +9,7 @@ var map = require('./app/config/properties.js');
 
 var mongoose = require('mongoose');
 
-var apiController = require('./app/controller/messageHandler');
+var apiController = require('./app/controller/chatbot');
 
 var routes = require('./app/routes/index');
 var api = require('./app/routes/api');

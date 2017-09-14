@@ -2,12 +2,13 @@ const request = require('request');
 const Q = require("q");
 const emoji = require('moji-translate');
 const schedule = require('node-schedule');
+const chrono = require('chrono-node')
 
 const properties = require('../config/properties.js');
 
 const tracer = require('tracer')
-const logger = tracer.colorConsole();
-tracer.setLevel('warn');
+const logger = tracer.colorConsole({level: 'error'});
+// tracer.setLevel('warn');
 
 //API.ai setup
 const apiai = require('apiai');
@@ -49,29 +50,31 @@ const rescheduleAllReminders = function() {
 
 
 
-exports.deleteMemories = function(req, res) {
-	logger.trace(req.query);
-	const sender = req.query.sender;
-	const objectID = req.query.objectID;
+exports.deleteMemories = function(sender, objectID) {
+  logger.trace('deleteMemories');
+	const d = Q.defer()
 	deleteFromDb(sender, objectID)
 	.then(function(result) {
-		res.status(200).send(result);
+		d.resolve(result)
 	}).catch(function(e) {
-		res.sendStatus(400);
+		d.reject(e)
 	})
+  return d.promise
 }
 
 
 exports.acceptRequest = function(data) {
+  logger.trace('acceptRequest');
 	const d = Q.defer()
-	logger.log(data);
 	processNLP(data.text)
 	.then(function(nlpData) {
 		return routeByIntent(data.sender, nlpData, data.statedData)
 	}).then(function(result) {
+    logger.trace()
+    result.statusCode = 200 //temp
 		d.resolve(result)
 	}).catch(function(e) {
-		logger.error(e);
+		// logger.error(e);
 		d.reject(e)
 	});
 	return d.promise
@@ -82,7 +85,7 @@ const routeByIntent = function(sender, nlpData, statedData) {
 	const d = Q.defer()
 	const memory = extractAllContext(nlpData.parameters);
 	logger.log(memory)
-	const data = {requestData: nlpData, memory: memory}
+	const data = {requestData: nlpData, memories: [memory]}
 	memory.sender = sender;
 	memory.sentence = rewriteSentence(nlpData.resolvedQuery);
 	try {
@@ -113,9 +116,9 @@ const routeByIntent = function(sender, nlpData, statedData) {
 				memory.hitNum = statedData ? statedData.hitNum : 0;
 				logger.log(memory)
 				recallMemory(sender, memory, false, memory.hitNum)
-				.then(function(m) {
-					logger.log(m)
-					data.memory = m;
+				.then(function(memories) {
+					logger.log(memories)
+					data.memories = memories;
 					d.resolve(data)
 				}).catch(function(e) {
 					logger.error(e);
@@ -157,6 +160,8 @@ const routeByIntent = function(sender, nlpData, statedData) {
 				var dateTimeOriginal = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
 				if (dateTimeOriginal) {
 					memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+          memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, memory)
+    			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
 					storeMemory(sender, memory, statedData)
 					.then(function() {
 						scheduleReminder(memory);
@@ -177,8 +182,8 @@ const routeByIntent = function(sender, nlpData, statedData) {
 
 		case "provideDateTime":
 			var dateTimeOriginal = memory.entities.time || memory.entities.date || memory.entities['date-time'];
-			memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal)
-			memory.triggerDateTime = new Date(dateTimeNum);
+			memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, memory)
+			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
 			try {
 				// memory.intent = getContext(sender, 'lastAction').intent;
 				// memory.context = getContext(sender, 'lastAction').context;
@@ -222,12 +227,14 @@ const routeByIntent = function(sender, nlpData, statedData) {
 			if (memory.intent && memory.intent != 'Default Fallback Intent') {
 				// sendGenericMessage(sender, memory.intent, getContext(sender, 'consecutiveFails') );
 			} else {
-				tryCarousel(sender, message)
-				.then(function() {
-					logger.debug();
+				recallMemory(sender, memory, false, memory.hitNum)
+				.then(function(memories) {
+					logger.log(memories)
+					data.memories = memories;
+					d.resolve(data)
 				}).catch(function(e) {
 					logger.error(e);
-					giveUp(sender);
+					d.reject(e)
 				})
 			}
 			break;
@@ -239,6 +246,7 @@ const routeByIntent = function(sender, nlpData, statedData) {
 const processNLP = function(text) {
 	logger.trace(processNLP)
 	const d = Q.defer()
+  logger.log(text)
 	try {
 		const messageToApiai = text.substring(0, 256).replace(/\'/g, '\\\''); // Only sends API.AI the first 256 characters as it can't hanlogger.tracee more than that
 		const headers = {
@@ -254,7 +262,9 @@ const processNLP = function(text) {
 		};
 		function callback(error, response, body) {
 			if (!error && response.statusCode == 200) {
-				d.resolve(JSON.parse(body).result)
+        const result = JSON.parse(body).result
+        result.intent = result.metadata.intentName
+				d.resolve(result)
 			} else {
 				logger.error(error);
 				d.reject(error)
@@ -287,7 +297,7 @@ const recallMemory = function(sender, memory, attachments, hitNum) {
 	}).then(function(content) {
 		const thisHitNum = Math.min()
 		if (content.hits.length - (hitNum || 0) > 0) {
-			d.resolve(content.hits[(hitNum || 0)])
+			d.resolve([content.hits[(hitNum || 0)]]) // Should return all memories and pick one in chatbot.js
 		} else {
 			d.reject(404);
 			// tryCarousel(sender, memory.sentence)
@@ -355,7 +365,6 @@ const storeMemory = function(sender, memory, statedData) {
 const saveMemory = function(sender, m) {
 	logger.trace(saveMemory)
 	const d = Q.defer()
-	logger.trace(saveMemory);
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
 	fetchUserData(sender)
 	.then(function(content) {
@@ -410,6 +419,7 @@ const searchDb = function(index, params) {
 			logger.log(content.hits.map(function(hit) { return hit.sentence.substring(0,100) }));
 			fetchListItemCards(content.hits)
 			.then(function() {
+        logger.trace()
 				d.resolve(content);
 			})
 		}
@@ -418,6 +428,7 @@ const searchDb = function(index, params) {
 }
 
 const saveToDb = function(sender, memory) {
+  logger.trace(saveToDb)
 	const d = Q.defer();
 	memory.dateCreated = Date.now();
 	AlgoliaIndex.addObject(memory, function(err, content){
@@ -526,19 +537,18 @@ const createUserAccount = function(userData) {
 
 
 
-const getDateTimeNum = function(dateTimeOriginal) {
+const getDateTimeNum = function(dateTimeOriginal, memory) {
 	logger.trace(getDateTimeNum)
 	dateTime = dateTimeOriginal[0]
 	dateTime = chrono.parseDate(dateTime) || dateTime;
 	var dateTimeNum = dateTime.getTime();
 	if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'] && dateTimeOriginal.toString().length > 16)
-	dateTimeNum = dateTimeNum - 3600000
+    dateTimeNum = dateTimeNum - 3600000
 	if (dateTimeNum < new Date().getTime() && dateTimeNum+43200000 > new Date().getTime())
-	dateTimeNum += 43200000;
+    dateTimeNum += 43200000;
 	else if (dateTimeNum < new Date().getTime() && dateTimeNum+86400000 > new Date().getTime())
-	dateTimeNum += 86400000;
-	memory.triggerDateTimeNumeric = dateTimeNum
-	memory.triggerDateTime = new Date(dateTimeNum);
+    dateTimeNum += 86400000;
+	return dateTimeNum
 }
 
 
@@ -573,14 +583,16 @@ const fetchListItemCards = function(cards) {
   const self = this
   const promises = []
   cards.forEach(function(card) {
-    card.listCards = {}
     if (card.listItems) {
+      card.listCards = {}
       card.listItems.forEach(function(key) {
         const p = Q.defer()
         getDbObject(AlgoliaIndex, key)
         .then(function(content) {
           card.listCards[key] = content;
           p.resolve(content);
+        }).catch(function(e) {
+          p.reject(e)
         })
         promises.push(p.promise)
       })
@@ -588,6 +600,7 @@ const fetchListItemCards = function(cards) {
   })
   Q.allSettled(promises)
   .then(function(results) {
+    logger.trace(results)
     d.resolve(results);
   }).catch(function(e) {
     logger.error(e);
@@ -678,5 +691,14 @@ function extractAllContext(e) {
 	return finalEntities;
 }
 
+
+const getEmojis = function(text, entities, max, strict) {
+	if (strict) {
+		const words = entities['noun'] || entities['action-noun'] || entities['verb'] || entities['action-verb']
+		if (words) text = words.join(' ')
+	}
+
+	return (emoji.translate(text, true).substring(0, 2) || '✅')
+}
 
 // rescheduleAllReminders();
