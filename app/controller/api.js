@@ -1827,7 +1827,7 @@ const getActionSentence = function(sentence, context) {
 	console.log(end);
 	const text = rewriteSentence(sentence.substring(start, end+1))
 	console.log(text);
-	return getEmojis(text) + ' ' + text;
+	return getEmojis(text) + ' ' + sentence;
 }
 
 /* Now returns both context and all the other bits (except intent) */
