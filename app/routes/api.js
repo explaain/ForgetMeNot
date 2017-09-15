@@ -6,12 +6,9 @@ var router = express.Router();
 
 // router.get('/', apiController.tokenVerification);
 router.post('/memories', function(req, res) {
-  const data = res.body;
-  data.statedData = {
-    allInOne: true,
-    intent: 'storeMemory',
-  }
-  if (req.body.objectID) data.statedData.objectID = req.body.objectID;
+  const data = req.body;
+  data.allInOne = true
+  data.intent = 'storeMemory'
   apiController.acceptRequest(data)
   .then(function(results) {
 		res.status(200).send(result);

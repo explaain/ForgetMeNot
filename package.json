@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node ./bin/www",
     "test": "mocha",
-    "test-single": "mocha --grep Tesco"
+    "test-single": "mocha --grep quick"
   },
   "dependencies": {
     "@google/maps": "^0.3.1",
