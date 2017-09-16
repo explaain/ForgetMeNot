@@ -1,3 +1,5 @@
+//TODO: delete Cloudinary images saved during tests
+
 const Q = require("q");
 const assert = require('assert');
 
@@ -156,7 +158,9 @@ const checkMemoryExistence = function(objectID) {
 describe('Bulk', function() {
   this.timeout(10000);
   const sender = 1627888800569309;
+
   describe('API', function() {
+
     const shortMessage = "Test Message"
     describe('Sending the short message "' + shortMessage + '"', function() {
       const results = {};
@@ -197,7 +201,7 @@ describe('Bulk', function() {
       const message2 = "Remind me at 5pm to feed the cat"
       describe('Sending the message "' + message2 + '"', function() {
         const expectedIntent = "setTask.dateTime"
-        const expectedDateTimeNum = 1505577600000
+        const expectedDateTimeNum = 1505620800000
 
         const results = {};
         before(function(done) {
@@ -295,6 +299,24 @@ describe('Bulk', function() {
 
 
   describe('Chatbot', function() {
+
+    const greeting = "Hello"
+    describe('Sending the greeting "' + greeting + '"', function() {
+      const results = {};
+      before(function(done) {
+        sendChatbotRequest(sender, greeting, results, done)
+      })
+
+      it('should be interpreted as a "greeting"', function(done) {
+        assert(results.body.requestData.metadata.intentName == 'greeting')
+        done()
+      })
+      it('should return a message', function(done) {
+        assert(results.body.messageData[0].data.message.text)
+        done()
+      })
+    })
+
     const shortMessage = "Test Message"
     describe('Sending the chatbot1 short message "' + shortMessage + '"', function() {
       const results = {};
@@ -303,11 +325,11 @@ describe('Bulk', function() {
       })
 
       it('should return a message', function(done) {
-        assert(results.body.messageData.message.text)
+        assert(results.body.messageData[0].data.message.text)
         done()
       })
       it('should bring back more quick reply options', function(done) {
-        assert(results.body.messageData.message.quick_replies && results.body.messageData.message.quick_replies.length)
+        assert(results.body.messageData[0].data.message.quick_replies && results.body.messageData[0].data.message.quick_replies.length)
         done()
       })
     })
@@ -322,7 +344,7 @@ describe('Bulk', function() {
       });
 
       it('should be say it\s remembered it for you', function(done) {
-        assert(results.body.messageData.message.text.indexOf(expectedFragment) > -1)
+        assert(results.body.messageData[0].data.message.text.indexOf(expectedFragment) > -1)
         done()
       })
     })
@@ -356,11 +378,11 @@ describe('Bulk', function() {
           });
 
           it('should ask what it should have done', function(done) {
-            assert.equal(resultList[1].messageData.message.text, 'Whoops - was there something you would have preferred me to do?')
+            assert.equal(resultList[1].messageData[0].data.message.text, 'Whoops - was there something you would have preferred me to do?')
             done()
           })
           it('should bring back more quick reply options', function(done) {
-            assert(resultList[1].messageData.message.quick_replies && resultList[1].messageData.message.quick_replies.length)
+            assert(resultList[1].messageData[0].data.message.quick_replies && resultList[1].messageData[0].data.message.quick_replies.length)
             done()
           })
         })
@@ -381,7 +403,7 @@ describe('Bulk', function() {
           });
 
           it('should bring back a different result from the previous one', function(done) {
-            assert.notEqual(resultList[0].messageData.message.text, resultList[2].messageData.message.text)
+            assert.notEqual(resultList[0].messageData[0].data.message.text, resultList[2].messageData[0].data.message.text)
             done()
           })
         })
@@ -409,7 +431,7 @@ describe('Bulk', function() {
           });
 
           it('should be say it\s remembered it for you', function(done) {
-            assert(resultList[resultList.length-1].messageData.message.text.indexOf(expectedFragment) > -1)
+            assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment) > -1)
             done()
           })
         })
@@ -431,9 +453,10 @@ describe('Bulk', function() {
           });
 
           it('should bring back more quick reply options', function(done) {
-            assert(resultList[resultList.length-1].messageData.message.quick_replies && resultList[resultList.length-1].messageData.message.quick_replies.length)
+            assert(resultList[resultList.length-1].messageData[0].data.message.quick_replies && resultList[resultList.length-1].messageData[0].data.message.quick_replies.length)
             done()
           })
+          it('...which are not the default quick reply options')
         })
 
         const code5 = "CORRECTION_ADD_ATTACHMENT"
@@ -520,7 +543,7 @@ describe('Bulk', function() {
           });
 
           it('should show a carousel', function(done) {
-            assert(resultList[resultList.length-1].messageData.message && resultList[resultList.length-1].messageData.message.attachment && resultList[resultList.length-1].messageData.message.attachment.payload && resultList[resultList.length-1].messageData.message.attachment.payload.elements)
+            assert(resultList[resultList.length-1].messageData[0].data.message && resultList[resultList.length-1].messageData[0].data.message.attachment && resultList[resultList.length-1].messageData[0].data.message.attachment.payload && resultList[resultList.length-1].messageData[0].data.message.attachment.payload.elements)
             done()
           })
         })
@@ -546,7 +569,7 @@ describe('Bulk', function() {
           });
 
           it('should bring back quick reply options', function(done) {
-            assert(resultList[resultList.length-1].messageData.message.quick_replies && resultList[resultList.length-1].messageData.message.quick_replies.length)
+            assert(resultList[resultList.length-1].messageData[0].data.message.quick_replies && resultList[resultList.length-1].messageData[0].data.message.quick_replies.length)
             done()
           })
         })
@@ -568,7 +591,7 @@ describe('Bulk', function() {
           });
 
           it('should be say type your message below', function(done) {
-            assert(resultList[resultList.length-1].messageData.message.text.indexOf(expectedFragment) > -1)
+            assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment) > -1)
             done()
           })
         })
@@ -590,22 +613,133 @@ describe('Bulk', function() {
             return d.promise
           });
 
-          it('should be say it\s remembered it for you', function(done) {
-            assert(resultList[resultList.length-1].messageData.message.text.indexOf(expectedFragment1) > -1)
-            done()
-          })
-          it('should have the message included', function(done) {
+          it('memory should have the message included', function(done) {
             assert(resultList[resultList.length-1].memories[0].sentence.indexOf(expectedFragment2) > -1)
             done()
           })
-          it('should have an attachment included', function(done) {
+          it('memory should have an attachment included', function(done) {
             assert(resultList[resultList.length-1].memories[0].attachments && resultList[resultList.length-1].memories[0].attachments.length)
+            done()
+          })
+          it('message should be say it\s remembered it for you', function(done) {
+            assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment1) > -1)
+            done()
+          })
+          it('message should have the message included', function(done) {
+            assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment2) > -1)
+            done()
+          })
+          it('message should have an attachment included', function(done) {
+            assert(resultList[resultList.length-1].messageData[0].data.message.attachment && resultList[resultList.length-1].messageData[0].data.message.attachment.payload)
             done()
           })
         })
       })
+
+      describe('Send dateTime reminder without the dateTime details, then confirm dateTime and then reply with details', function() {
+        var resultList = []
+
+        const message1 = "Remind me to feed the cat"
+        describe('Sending the message "' + message1 + '"', function() {
+          const expectedIntent = "setTask.dateTime"
+
+          // const results = {};
+          // before(function(done) {
+          //   sendApiRequest(sender, message1, results, done)
+          // });
+
+          it('should be interpreted as a ' + expectedIntent
+            // , function(done) {
+            //   assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+            //   done()
+            // }
+          )
+          it('should bring back quick reply options'
+            // , function(done) {
+            //   assert(resultList[resultList.length-1].messageData[0].data.message.quick_replies && resultList[resultList.length-1].messageData[0].data.message.quick_replies.length)
+            //   done()
+            // }
+          )
+        })
+
+        const code1 = "CORRECTION_GET_DATETIME"
+        describe('...followed by the quick reply "' + code1 + '"', function() {
+          const expectedFragment = "Sure thing - when shall I remind you?"
+
+          // before(function() {
+          //   const d = Q.defer()
+          //   sendChatbotQuickReply(sender, code1)
+          //   .then(function(res) {
+          //     resultList.push(res)
+          //     d.resolve()
+          //   }).catch(function(e) {
+          //     d.reject(e)
+          //   })
+          //   return d.promise
+          // });
+
+          it('should ask when to remind you'
+            // , function(done) {
+            //   assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment) > -1)
+            //   done()
+            // }
+          )
+        })
+
+        const message2 = "tomorrow at 5pm"
+        describe('Sending the message "' + message2 + '"', function() {
+          const expectedIntent = "setTask.provieDateTime"
+          const expectedDateTimeNum = 1505664000000
+
+          // const results = {};
+          // before(function(done) {
+          //   sendApiRequest(sender, message2, results, done)
+          // });
+
+          it('should be interpreted as a ' + expectedIntent
+            // , function(done) {
+            //   assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+            //   done()
+            // }
+          )
+          it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
+            // , function(done) {
+            //   logger.trace(results.body.memories[0])
+            //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
+            //   done()
+            // }
+          )
+        })
+      })
     })
   });
+
+  describe('Messenger', function() {
+    describe('Say hello', function() {
+      it('should return a greeting')
+    })
+    describe('Request a memory', function() {
+      it('should return the memory')
+    })
+    describe('Request a long memory', function() {
+      it('should return the memory in multiple parts')
+    })
+    describe('Request a memory with an attachment', function() {
+      it('should return the memory plus attachment in multiple parts')
+    })
+    describe('Store a memory', function() {
+      it('should store the memory')
+      it('should return the memory')
+    })
+    describe('Store a long memory', function() {
+      it('should store the memory')
+      it('should return the memory in multiple parts')
+    })
+    describe('Store a memory with an attachment', function() {
+      it('should store the memory plus attachment')
+      it('should return the memory plus attachment in multiple parts')
+    })
+  })
 
   after(function() {
     describe('Clearup', function() {

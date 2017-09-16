@@ -1,5 +1,5 @@
-// @TODO: allInOne
 //TODO: uncomment rescheduleAllReminders();
+//TODO: intent 'nextResult'
 
 const request = require('request');
 const Q = require("q");
@@ -236,6 +236,7 @@ const routeByIntent = function(requestData) {
 		default:
 			if (requestData.intent && requestData.intent != 'Default Fallback Intent') {
 				// sendGenericMessage(sender, memory.intent, getContext(sender, 'consecutiveFails') );
+        d.resolve({requestData: requestData})
 			} else {
 				recallMemory(requestData)
 				.then(function(memories) {

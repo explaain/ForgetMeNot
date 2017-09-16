@@ -1,8 +1,7 @@
-//@TODO: figure out sending typing on/off
 //@TODO: figure out first message after Get started
 //@TODO: Refactor onboarding
 //@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
-//@TODO:
+//@TODO: provideURL and provideDateTime
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
 
@@ -14,7 +13,8 @@ const schedule = require('node-schedule');
 const crypto = require("crypto");
 const Q = require("q");
 const emoji = require('moji-translate');
-const Randoms = require('../controller/cannedResponses.js')
+const Randoms = require('../controller/cannedResponses.js').Randoms
+
 
 
 const tracer = require('tracer')
@@ -86,17 +86,17 @@ exports.handleMessage = function(body) {
 			logger.trace()
 			var firstPromise;
 			if (postback == 'GET_STARTED_PAYLOAD') {
-				sendSenderAction(sender, 'typing_on');
+				//sendSenderAction(sender, 'typing_on');
 				firstMessage(sender);
 				logger.trace()
 			} else if (event.message) {
 				logger.trace(event.message)
 				if (event.message.quick_reply) {
-					sendSenderAction(sender, 'mark_seen');
+					//sendSenderAction(sender, 'mark_seen');
 					firstPromise = handleQuickReplies({sender: sender}, event.message.quick_reply)
 				}	else if ((text = event.message.text)) {
 					logger.trace(text)
-					sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
+					//sendSenderAction(sender, 'typing_on'); // Ideally this would happen after checking we actually want to respond
 					// Handle a text message from this sender
 					switch(text) {
 						case "test":
@@ -146,24 +146,16 @@ exports.handleMessage = function(body) {
 
 			firstPromise
 			.then(function(res) {
-				if (res.memories) { //Not sure if this is the right condition?
+				if (res && res.memories) { //Not sure if this is the right condition?
 					setContext(sender, 'lastAction', res)
 				}
-				const responseMessage = getResponseMessage(res)
+				const responseMessage = res ? getResponseMessage(res) : null
 				d.resolve(responseMessage)
 			}).catch(function(e) {
 				logger.error(e)
 				d.reject(e)
 			}).done()
 
-			// .then(function(res) {
-			// 	logger.log(res)
-			// 	result = res
-			// }).catch(function(e) {
-			// 	logger.error(e);
-			// 	getCarousel(sender, message)
-			// 	.then(function() {
-			//
 			// 	}).catch(function(e) {
 			// 		giveUp(sender);
 			// 	})
@@ -209,12 +201,12 @@ const handleQuickReplies = function(requestData, quickReply) {
 	switch (quickReply.payload) {
 		case "USER_FEEDBACK_MIDDLE":
 			var messageData = sendCorrectionMessage(sender)
-			d.resolve({requestData: requestData, messageData: messageData})
+			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "USER_FEEDBACK_BOTTOM":
 			var messageData = sendCorrectionMessage(sender)
-			d.resolve({requestData: requestData, messageData: messageData})
+			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "CORRECTION_STORE_TO_QUERY":
@@ -267,7 +259,7 @@ const handleQuickReplies = function(requestData, quickReply) {
 
 		case "CORRECTION_CAROUSEL":
 			var messageData = getCarousel(sender, getContext(sender, 'lastAction').memories)
-			d.resolve({requestData: requestData, messageData: messageData})
+			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "CORRECTION_GET_DATETIME":
@@ -282,12 +274,12 @@ const handleQuickReplies = function(requestData, quickReply) {
 
 		case "PREPARE_ATTACHMENT":
 			var messageData = createTextMessage(sender, "Sure thing - type your message below and I'll attach it...", 0, [])
-			d.resolve({requestData: requestData, messageData: messageData})
+			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		default:
-			logger.error()
-			d.reject()
+			logger.info('Unknown quick reply - sending no response')
+			d.resolve()
 			break;
 	}
 	return d.promise
@@ -307,8 +299,8 @@ const prepareAttachments = function(requestData, attachments) {
 		["⤴️ Previous", "CORRECTION_ADD_ATTACHMENT"],
 		["⤵️ Next", "PREPARE_ATTACHMENT"],
 	];
-	const messageData = createTextMessage(sender, "Did you want me to add this " + type + " to the previous message or the next one?", 0, quickReplies)
-	d.resolve({requestData: requestData, messageData: messageData})
+	const messageData = createTextMessage(sender, "Did you want me to add this " + type + " to the previous message or the next one?", quickReplies)
+	d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 	return d.promise
 }
 
@@ -339,67 +331,76 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
       text: text[Math.floor(Math.random() * text.length)]
     }
   };
-  d.resolve(messageData);
+  return messageData
 
 	// now won't do this yet
 
-	try {
-		if (Randoms.gifs[type] && Math.floor(Math.random()*5)==0) { // (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
-			const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
-			if (gif) {
-				var messageData2 = {
-					recipient: {
-						id: recipientId
-					},
-					message: {
-						attachment: {
-							type: "image",
-							payload: {
-								url: gif[Math.floor(Math.random() * gif.length)]
+	if (false) {
+		try {
+			if (Randoms.gifs[type] && Math.floor(Math.random()*5)==0) { // (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
+				const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
+				if (gif) {
+					var messageData2 = {
+						recipient: {
+							id: recipientId
+						},
+						message: {
+							attachment: {
+								type: "image",
+								payload: {
+									url: gif[Math.floor(Math.random() * gif.length)]
+								}
 							}
 						}
-					}
-				};
-				d.resolve(messageData2);
+					};
+					d.resolve(messageData2);
+				}
 			}
+		} catch(e) {
+			logger.trace(e);
 		}
-	} catch(e) {
-		logger.trace(e);
 	}
-
-	return d.promise
 }
 
 /* function sends message back to user */
 
-function sendSenderAction(recipientId, sender_action) {
-	logger.trace(sendSenderAction);
-	const d = Q.defer()
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    sender_action: sender_action
-  };
-  d.resolve(messageData);
-	return d.promise
-}
-function createTextMessage(recipientId, messageText, quickReplies) {
-	logger.trace(createTextMessage);
-	logger.log(quickReplies)
-	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
-	messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      text: messageText
-    }
-  };
-	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
-	logger.trace(messageData)
-  return messageData
+function createTextMessage(recipientId, message, quickReplies) {
+	logger.trace();
+	try {
+
+		if (typeof message === 'string') {
+			message = {text: message}
+		}
+		const messageData = {
+			recipient: {
+				id: recipientId
+			},
+			message: {}
+		};
+		if (message.text) {
+			message.text = message.text.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
+			messageData.message.text = message.text
+		}
+		if (message.attachment) {
+			const messageAttachment = message.attachment.attachment_id ? {
+				type: message.attachment.type,
+				payload: {
+					attachment_id: message.attachment.attachment_id
+				}
+			} : {
+				type: message.attachment.type,
+				payload: {
+					url: message.attachment.url
+				}
+			}
+			messageData.message.attachment = messageAttachment
+		}
+		messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
+		logger.trace(messageData)
+		return messageData
+	} catch(e) {
+		logger.error(e)
+	}
 }
 function getCarouselMessage(recipientId, elements, delay, quickReplies) {
 	logger.trace(getCarouselMessage);
@@ -422,32 +423,32 @@ function getCarouselMessage(recipientId, elements, delay, quickReplies) {
 	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
   return messageData
 }
-function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
-	logger.trace(sendAttachmentMessage);
-	const messageAttachment = attachment.attachment_id ? {
-		type: attachment.type,
-		payload: {
-			attachment_id: attachment.attachment_id
-		}
-	} : {
-		type: attachment.type,
-		payload: {
-			url: attachment.url
-		}
-	}
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-			attachment: messageAttachment
-    }
-  };
-	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
-  return d.resolve(messageData);
-}
+// function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
+// 	logger.trace()
+// 	const messageAttachment = attachment.attachment_id ? {
+// 		type: attachment.type,
+// 		payload: {
+// 			attachment_id: attachment.attachment_id
+// 		}
+// 	} : {
+// 		type: attachment.type,
+// 		payload: {
+// 			url: attachment.url
+// 		}
+// 	}
+//   var messageData = {
+//     recipient: {
+//       id: recipientId
+//     },
+//     message: {
+// 			attachment: messageAttachment
+//     }
+//   };
+// 	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
+//   return d.resolve(messageData);
+// }
 function sendCorrectionMessage(recipientId) {
-	logger.trace(sendAttachmentMessage);
+	logger.trace();
   var messageData = {
     recipient: {
       id: recipientId
@@ -614,7 +615,7 @@ const getResponseMessage = function(result) {
 					break;
 
 				default:
-
+					result.messageData = [{data: sendGenericMessage(result.requestData.sender, result.requestData.intent)}]
 			}
 
 		case 412:
@@ -647,12 +648,14 @@ const getResponseMessage = function(result) {
 	logger.log(m)
 	if (!result.messageData && m) {
 		m = prepareResult(sender, m)
-		result.messageData = createTextMessage(sender, m.resultSentence, quickReplies)
+		result.messageData = [{data: createTextMessage(sender, {text: m.resultSentence, attachment: m.attachments && m.attachments[0] || null}, quickReplies)}]
 	}
 
-	if (result.messageData.message && !getContext(result.messageData.recipient.id, 'failing')) {
-		setContext(result.messageData.recipient.id, 'consecutiveFails', 0)
+	// ???
+	if (result.messageData && result.messageData[0] && result.messageData[0].data && result.messageData[0].data.message && !getContext(result.messageData[0].data.recipient.id, 'failing')) {
+		setContext(result.messageData[0].data.recipient.id, 'consecutiveFails', 0)
 	}
+
 
 	logger.log(result)
 
@@ -702,19 +705,10 @@ function prepareResult(sender, memory) {
 	if (memory.attachments) {
 		if (~[".","!","?",";"].indexOf(sentence[sentence.length-1])) sentence = sentence.substring(0, sentence.length - 1);;
 		sentence+=" ⬇️";
+		// sendAttachmentMessage(sender, memory.attachments[0])
 	}
 	memory.resultSentence = sentence
 	return memory
-	// createTextMessage(sender, sentence, 0, quickReplies)
-	// .then(function(messageData) {
-	// // 	return memory.attachments ? sendAttachmentMessage(sender, memory.attachments[0]) : Q.fcall(function() {return null});
-	// // }).then(function() {
-	// 	logger.log(messageData)
-	// 	d.resolve(messageData)
-	// }).catch(function(e) {
-	// 	logger.error(e);
-	// 	d.reject(e)
-	// });
 }
 
 function tryAnotherMemory(sender) {

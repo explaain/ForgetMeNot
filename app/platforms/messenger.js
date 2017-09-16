@@ -1,5 +1,6 @@
 //@TODO: Sort delays (currently always 0)
 //@TODO: Sort endpoints (currently always message endpoint - not attachment)
+//@TODO: Investigate the default quick replies now being on all types of message...
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
 
@@ -106,7 +107,11 @@ exports.handleMessage = function(req, res) {
   .then(function(result) {
     logger.trace()
     logger.log(result)
-    prepareAndSendMessages(result.messageData, 0, properties.facebook_message_endpoint)
+    if (result && result.messageData) {
+      result.messageData.forEach(function(singleMessage) {
+        prepareAndSendMessages(singleMessage.data, singleMessage.delay || 0, properties.facebook_message_endpoint)
+      })
+    }
     res.sendStatus(200);
   }).catch(function(e) {
     logger.error(e)
@@ -118,14 +123,20 @@ exports.handleMessage = function(req, res) {
 
 function prepareAndSendMessages(messageData, delay, endpoint) {
 	logger.trace(prepareAndSendMessages);
-	if (messageData.json) console.log(messageData.json.message);
+	if (messageData.json) console.log(messageData.json.message); // ???
 	const d = Q.defer();
 	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
 	const messageDataArray = textArray.map(function(text) {
 		const data = JSON.parse(JSON.stringify(messageData));
+    delete data.message.attachment
 		if (text) data.message.text = text;
 		return data;
 	});
+  if (messageData.message.attachment) {
+    const attachmentMessageData = JSON.parse(JSON.stringify(messageData))
+    delete attachmentMessageData.message.text
+    messageDataArray.push(attachmentMessageData)
+  }
   logger.trace()
 	Q.allSettled(
 		messageDataArray.map(function(message, i, array) {
@@ -174,9 +185,9 @@ function splitChunk(message, limit) {
 
 function sendMessageAfterDelay(message, delay, endpoint) {
 	logger.trace(sendMessageAfterDelay);
-	logger.log(message)
+	logger.info(delay, message)
 	const d = Q.defer();
-	if (!message.sender_action && delay > 0) sendSenderAction(sender, 'typing_on');
+	if (!message.sender_action) sendSenderAction(sender, 'typing_on');
 	setTimeout(function() {
 		callSendAPI(message, endpoint)
 		.then(function(body) {
@@ -217,7 +228,24 @@ var callSendAPI = function(messageData, endpoint) {
 	return d.promise;
 }
 
-
+function sendSenderAction(recipientId, sender_action) {
+	logger.trace(sendSenderAction);
+	const d = Q.defer()
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    sender_action: sender_action
+  };
+	callSendAPI(messageData, properties.facebook_message_endpoint)
+	.then(function(body) {
+		d.resolve(body)
+	}).catch(function(err) {
+    logger.error(err)
+		d.reject(err)
+	});
+	return d.promise
+}
 
 
 
@@ -244,7 +272,7 @@ function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
     }
   };
 	// This won't work as trying to resolve with more than one argument
-  , 0, properties.facebook_message_attachments_endpoint); /* @TODO: will this work? */
+  // , 0, properties.facebook_message_attachments_endpoint); /* @TODO: will this work? */
   d.resolve(messageData)
   return d.promise
 }
