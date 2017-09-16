@@ -1,4 +1,5 @@
 // @TODO: allInOne
+//TODO: uncomment rescheduleAllReminders();
 
 const request = require('request');
 const Q = require("q");
@@ -59,6 +60,7 @@ exports.deleteMemories = function(sender, objectID) {
 	.then(function(result) {
 		d.resolve(result)
 	}).catch(function(e) {
+    logger.error(e);
 		d.reject(e)
 	})
   return d.promise
@@ -77,7 +79,7 @@ exports.acceptRequest = function(requestData) {
     result.statusCode = 200 //temp
 		d.resolve(result)
 	}).catch(function(e) {
-		// logger.error(e);
+		logger.error(e);
 		d.reject(e)
 	});
 	return d.promise
@@ -87,11 +89,14 @@ const routeByIntent = function(requestData) {
 	logger.trace(routeByIntent)
 	const d = Q.defer()
   var memory = {}
+  requestData.generalIntent = getGeneralIntent(requestData.intent)
   if (requestData.generalIntent == 'write') {
     memory = extractAllContext(requestData.parameters);
     memory.intent = requestData.intent;
     memory.sender = requestData.sender;
     memory.sentence = rewriteSentence(requestData.resolvedQuery);
+    memory.attachments = requestData.attachments;
+    if (requestData.objectID) memory.objectID = requestData.objectID;
     logger.log(memory)
   }
   const data = {requestData: requestData, memories: [memory]}
@@ -107,7 +112,8 @@ const routeByIntent = function(requestData) {
 		case "nextResult":
 			tryAnotherMemory(sender);
 			break;
-			case "storeMemory":
+
+		case "storeMemory":
 			storeMemory(memory)
 			.then(function() {
 				d.resolve(data)
@@ -268,7 +274,6 @@ const processNLP = function(text) {
 			if (!error && response.statusCode == 200) {
         const result = JSON.parse(body).result
         result.intent = result.metadata.intentName
-        result.generalIntent = getGeneralIntent(result.intent)
 				d.resolve(result)
 			} else {
 				logger.error(error);
@@ -295,14 +300,16 @@ const recallMemory = function(requestData) {
 		const userIdFilterString = 'userID: ' + requestData.sender + readAccessList.map(function(id) {return ' OR userID: '+id}).join('');
 		const searchParams = {
 			query: searchTerm.substring(0, 500), // Only sends Algolia the first 511 characters as it can't hanlogger.tracee more than that
-			filters: userIdFilterString
+			filters: userIdFilterString,
+      hitsPerPage: 10,
 			// filters: (attachments ? 'hasAttachments: true' : '')
 		};
 		return searchDb(AlgoliaIndex, searchParams)
 	}).then(function(content) {
-		if (content.hits.length - (requestData.hitNum || 0) > 0) {
-			d.resolve([content.hits[(requestData.hitNum || 0)]]) // Should return all memories and pick one in chatbot.js
+		if (content.hits.length) {
+			d.resolve(content.hits)
 		} else {
+      logger.error('No results found')
 			d.reject(404);
 			// tryCarousel(sender, memory.sentence)
 			// .then(function() {
@@ -363,10 +370,10 @@ const saveMemory = function(sender, m) {
 			getRankingInfo: true
 		};
 		return searchDb(AlgoliaIndex, searchParams)
-	}).then(function() {
-		return m.hasAttachments ? sendAttachmentUpload(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
-	}).then(function(results) {
-		if (m.hasAttachments && results[0].value.attachment_id) m.attachments[0].attachment_id = results[0].value.attachment_id;
+	// }).then(function() {
+	// 	return m.hasAttachments ? sendAttachmentUpload(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
+}).then(function(results) {
+		if (m.hasAttachments && results[0] && results[0].value.attachment_id) m.attachments[0].attachment_id = results[0].value.attachment_id;
 		return m.hasAttachments && m.attachments[0].type=="image" ? backupAttachment(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
 	}).then(function(url) {
 		if (m.hasAttachments && url) m.attachments[0].url = url;
@@ -389,6 +396,7 @@ const getDbObject = function(index, objectID, returnArray) {
 	const d = Q.defer();
 	index.getObject(objectID, returnArray, function(err, content) {
 		if (err) {
+      logger.error(err);
 			d.reject(err)
 		} else {
 			d.resolve(content);
@@ -402,6 +410,7 @@ const searchDb = function(index, params) {
 	const d = Q.defer();
 	index.search(params, function searchDone(err, content) { /* @TODO: investigate whether function name is needed */
 		if (err) {
+      logger.error(err);
 			d.reject(err)
 		} else {
 			logger.log(content.hits.map(function(hit) { return hit.sentence.substring(0,100) }));
@@ -422,6 +431,7 @@ const saveToDb = function(sender, memory) {
 	AlgoliaIndex.addObject(memory, function(err, content){
 		if (err) {
 			// sendTextMessage(id, "I couldn't remember that");
+      logger.error(err);
 			d.reject(err);
 		} else {
 			logger.trace('User memory created successfully!');
@@ -436,9 +446,9 @@ const updateDb = function(sender, memory) {
 	const d = Q.defer();
 	memory.dateUpdated = Date.now();
 	AlgoliaIndex.saveObject(memory, function(err, content){
-		if (e) {
-			logger.error(e);
-			d.reject(e);
+		if (err) {
+			logger.error(err);
+			d.reject(err);
 		} else {
 			logger.trace('User memory updated successfully!');
 			d.resolve(memory);
@@ -481,6 +491,7 @@ const fetchUserData = function(userID, forceRefresh) {
 		.then(function(userData) {
 			d.resolve(userData)
 		}).catch(function(e) {
+      logger.error(e)
 			d.reject(404)
 		})
 	}
@@ -544,8 +555,9 @@ const getDateTimeNum = function(dateTimeOriginal, memory) {
 const backupAttachment = function(recipientId, attachmentType, attachmentUrl) {
 	logger.trace(backupAttachment)
 	const d = Q.defer()
-	cloudinary.uploader.upload(attachmentUrl, function(error, result) {
+	cloudinary.uploader.upload(attachmentUrl, function(result, error) {
 		if (error) {
+      logger.error(error);
 			d.reject(error)
 		} else {
 			d.resolve(result.url)
@@ -580,6 +592,7 @@ const fetchListItemCards = function(cards) {
           card.listCards[key] = content;
           p.resolve(content);
         }).catch(function(e) {
+          logger.error(e);
           p.reject(e)
         })
         promises.push(p.promise)
@@ -708,5 +721,6 @@ const getGeneralIntent = function(intent) {
     return 'other'
   }
 }
+
 
 // rescheduleAllReminders();

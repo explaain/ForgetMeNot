@@ -216,3 +216,35 @@ var callSendAPI = function(messageData, endpoint) {
   });
 	return d.promise;
 }
+
+
+
+
+
+
+
+
+
+// Need to implement this!
+function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
+	logger.trace();
+  const d = Q.defer()
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+			attachment: {
+	      type: attachmentType,
+	      payload: {
+	        url: attachmentUrl,
+					'is_reusable': true
+	      }
+	    }
+    }
+  };
+	// This won't work as trying to resolve with more than one argument
+  , 0, properties.facebook_message_attachments_endpoint); /* @TODO: will this work? */
+  d.resolve(messageData)
+  return d.promise
+}

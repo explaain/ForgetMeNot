@@ -3,11 +3,15 @@ const assert = require('assert');
 
 const api = require('../app/controller/api');
 const chatbot = require('../app/controller/chatbot');
-// var properties = require('../app/config/properties.js');
+const properties = require('../app/config/properties.js');
 
 const tracer = require('tracer')
 const logger = tracer.colorConsole({level: 'info'});
 
+// Algolia setup
+const AlgoliaSearch = require('algoliasearch');
+const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algolia_api_key,{ protocol: 'https:' });
+const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
 
 const temporaryMemories = []
 
@@ -16,18 +20,19 @@ const sendRequest = function(apiFunction, data, results, done) {
   logger.log(results)
   apiFunction(data)
   .then(function(body) {
-    results.body = body
+    body = JSON.parse(JSON.stringify(body))
+    if (results) results.body = body
     if (done) {
       done()
     }
     if (body.requestData.generalIntent == 'write' && body.requestData.intent != 'deleteMemory') {
       temporaryMemories.push(body.memories[0].objectID)
     }
-    d.resolve()
+    d.resolve(body)
   }).catch(function(e) {
     logger.error(e);
     if (done) done(e)
-    d.reject()
+    d.reject(e)
   })
   return d.promise
 }
@@ -100,11 +105,56 @@ const sendChatbotQuickReply = function(sender, code, results, done) {
   return sendRequest(apiFunction, data, results, done)
 }
 
+const sendChatbotAttachments = function(sender, code, results, done) {
+  const data = {
+    entry: [
+      {
+        messaging: [
+          {
+            sender: {
+              id: sender
+            },
+            message: {
+              attachments: [
+                {
+                  type: 'image',
+                  payload: {
+                    url: 'https://unsplash.it/200/300/?random'
+                  }
+                }
+              ]
+            },
+          }
+        ]
+      }
+    ]
+  }
+  const apiFunction = chatbot.handleMessage
+  return sendRequest(apiFunction, data, results, done)
+}
 
+
+
+
+
+
+const checkMemoryExistence = function(objectID) {
+  const d = Q.defer()
+  AlgoliaIndex.getObject(objectID, function searchDone(err, content) {
+    if (err && err.statusCode == 404) {
+		  d.resolve(false)
+    } else { // This isn't quite right
+      logger.error(err)
+      d.reject(err)
+    }
+	});
+  return d.promise
+}
 
 
 
 describe('Bulk', function() {
+  this.timeout(10000);
   const sender = 1627888800569309;
   describe('API', function() {
     const shortMessage = "Test Message"
@@ -147,7 +197,7 @@ describe('Bulk', function() {
       const message2 = "Remind me at 5pm to feed the cat"
       describe('Sending the message "' + message2 + '"', function() {
         const expectedIntent = "setTask.dateTime"
-        const expectedDateTimeNum = 1505491200000
+        const expectedDateTimeNum = 1505577600000
 
         const results = {};
         before(function(done) {
@@ -160,7 +210,7 @@ describe('Bulk', function() {
         })
         it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"', function(done) {
           logger.trace(results.body.memories[0])
-          assert.equal(results.body.memories[0].triggerDateTime.getTime(), expectedDateTimeNum)
+          assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
           done()
         })
       })
@@ -168,7 +218,7 @@ describe('Bulk', function() {
       const message3 = "Remind me at 5pm tomorrow to feed the cat"
       describe('Sending the message "' + message3 + '"', function() {
         const expectedIntent = "setTask.dateTime"
-        const expectedDateTimeNum = 1505577600000
+        const expectedDateTimeNum = 1505664000000
 
         const results = {};
         before(function(done) {
@@ -181,7 +231,7 @@ describe('Bulk', function() {
         })
         it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"', function(done) {
           logger.trace(results.body.memories[0])
-          assert.equal(results.body.memories[0].triggerDateTime.getTime(), expectedDateTimeNum)
+          assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
           done()
         })
       })
@@ -189,7 +239,7 @@ describe('Bulk', function() {
       const message4 = "Remind me tomorrow at 5pm to feed the cat"
       describe('Sending the message "' + message4 + '"', function() {
         const expectedIntent = "setTask.dateTime"
-        const expectedDateTimeNum = 1505577600000
+        const expectedDateTimeNum = 1505664000000
 
         const results = {};
         before(function(done) {
@@ -202,7 +252,7 @@ describe('Bulk', function() {
         })
         it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"', function(done) {
           logger.trace(results.body.memories[0])
-          assert.equal(results.body.memories[0].triggerDateTime.getTime(), expectedDateTimeNum)
+          assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
           done()
         })
       })
@@ -277,126 +327,282 @@ describe('Bulk', function() {
       })
     })
 
-    // describe('Date/Time-based Reminders', function() {
-    //   const message2 = "Remind me at 5pm to feed the cat"
-    //   describe('Sending the message "' + message2 + '"', function() {
-    //     const expectedIntent = "setTask.dateTime"
-    //     const expectedDateTimeNum = 1505448000000
-    //
-    //     const results = {};
-    //     before(function(done) {
-    //       sendChatbotRequest(sender, message2, results, done)
-    //     });
-    //
-    //     it('should be interpreted as a ' + expectedIntent, function(done) {
-    //       assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
-    //       done()
-    //     })
-    //     it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"', function(done) {
-    //       logger.trace(results.body.memories[0])
-    //       assert.equal(results.body.memories[0].triggerDateTime.getTime(), expectedDateTimeNum)
-    //       done()
-    //     })
-    //   })
-    //
-    //   const message3 = "Remind me at 5pm tomorrow to feed the cat"
-    //   describe('Sending the message "' + message3 + '"', function() {
-    //     const expectedIntent = "setTask.dateTime"
-    //     const expectedDateTimeNum = 1505491200000
-    //
-    //     const results = {};
-    //     before(function(done) {
-    //       sendChatbotRequest(sender, message3, results, done)
-    //     });
-    //
-    //     it('should be interpreted as a ' + expectedIntent, function(done) {
-    //       assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
-    //       done()
-    //     })
-    //     it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"', function(done) {
-    //       logger.trace(results.body.memories[0])
-    //       assert.equal(results.body.memories[0].triggerDateTime.getTime(), expectedDateTimeNum)
-    //       done()
-    //     })
-    //   })
-    //
-    //   const message4 = "Remind me tomorrow at 5pm to feed the cat"
-    //   describe('Sending the message "' + message4 + '"', function() {
-    //     const expectedIntent = "setTask.dateTime"
-    //     const expectedDateTimeNum = 1505491200000
-    //
-    //     const results = {};
-    //     before(function(done) {
-    //       sendChatbotRequest(sender, message4, results, done)
-    //     });
-    //
-    //     it('should be interpreted as a ' + expectedIntent, function(done) {
-    //       assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
-    //       done()
-    //     })
-    //     it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"', function(done) {
-    //       logger.trace(results.body.memories[0])
-    //       assert.equal(results.body.memories[0].triggerDateTime.getTime(), expectedDateTimeNum)
-    //       done()
-    //     })
-    //   })
-    // })
-    //
-    //
-    //
-    // describe('URL-based Reminders', function() {
-    //   const message5 = "Remind me to buy cat food next time I'm on Tesco.com"
-    //   describe('Sending the message "' + message5 + '"', function() {
-    //     const expectedIntent = "setTask.URL"
-    //     const expectedUrl = 'Tesco.com'
-    //
-    //     const results = {};
-    //     before(function(done) {
-    //       sendChatbotRequest(sender, message5, results, done)
-    //     });
-    //
-    //     it('should be interpreted as a ' + expectedIntent, function(done) {
-    //       assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
-    //       done()
-    //     })
-    //     it('should bring back a result with the "triggerUrl" parameter "' + expectedUrl + '"', function(done) {
-    //       assert.equal(results.body.memories[0].triggerUrl, expectedUrl)
-    //       done()
-    //     })
-    //   })
-    // })
 
 
 
-
-
-    describe('Messages with Quick Replies', function() {
+    describe('Message sequences', function() {
       const message1 = "What does my cat look like?"
       const code1 = "USER_FEEDBACK_MIDDLE"
-      describe('Sending the message "' + message1 + '", followed by the quick reply "' + code1 + '"', function() {
-        const expectedIntent = "setTask.URL"
-        const expectedUrl = 'Tesco.com'
+      describe('Recall different memories, change to storeMemory, add attachment, change back and then request Carousel', function() {
+        var resultList = []
+        describe('Sending the message "' + message1 + '", followed by the quick reply "' + code1 + '"', function() {
 
-        const results = {};
-        before(function(done) {
-          sendChatbotRequest(sender, message1, results)
-          .then(function() {
-            sendChatbotQuickReply(sender, code1, results, done)
+          before(function() {
+            const d = Q.defer()
+            sendChatbotRequest(sender, message1)
+            .then(function(res) {
+              resultList.push(res)
+              sendChatbotQuickReply(sender, code1)
+              .then(function(res1) {
+                resultList.push(res1)
+                d.resolve()
+              }).catch(function(e) {
+                d.reject(e)
+              })
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should ask what it should have done', function(done) {
+            assert.equal(resultList[1].messageData.message.text, 'Whoops - was there something you would have preferred me to do?')
+            done()
           })
-        });
+          it('should bring back more quick reply options', function(done) {
+            assert(resultList[1].messageData.message.quick_replies && resultList[1].messageData.message.quick_replies.length)
+            done()
+          })
+        })
 
-        it('should ask what it should have done', function(done) {
-          assert.equal(results.body.messageData.message.text, 'Whoops - was there something you would have preferred me to do?')
-          done()
+        const code2 = "CORRECTION_QUERY_DIFFERENT"
+        describe('...followed by the quick reply "' + code2 + '"', function() {
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotQuickReply(sender, code2)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should bring back a different result from the previous one', function(done) {
+            assert.notEqual(resultList[0].messageData.message.text, resultList[2].messageData.message.text)
+            done()
+          })
         })
-        it('should bring back more quick reply options', function(done) {
-          assert(results.body.messageData.message.quick_replies && results.body.messageData.message.quick_replies.length)
-          done()
+
+        const code3 = "CORRECTION_QUERY_TO_STORE"
+        describe('...followed by the quick reply "' + code1 + '", then the quick reply "' + code3 + '"', function() {
+          const expectedFragment = "I've now remembered that for you!"
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotQuickReply(sender, code1)
+            .then(function(res) {
+              resultList.push(res)
+              sendChatbotQuickReply(sender, code3)
+              .then(function(res1) {
+                resultList.push(res1)
+                d.resolve()
+              }).catch(function(e) {
+                d.reject(e)
+              })
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should be say it\s remembered it for you', function(done) {
+            assert(resultList[resultList.length-1].messageData.message.text.indexOf(expectedFragment) > -1)
+            done()
+          })
         })
-        // it('should bring back a result with the "triggerUrl" parameter "' + expectedUrl + '"', function(done) {
-        //   assert.equal(results.body.memories[0].triggerUrl, expectedUrl)
-        //   done()
-        // })
+
+        const attachment1 = 'https://unsplash.it/200/300/?random'
+        describe('...followed by the attachment "' + attachment1 + '"', function() {
+          // const expectedFragment = "I've now remembered that for you!"
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotAttachments(sender, attachment1, 'image')
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should bring back more quick reply options', function(done) {
+            assert(resultList[resultList.length-1].messageData.message.quick_replies && resultList[resultList.length-1].messageData.message.quick_replies.length)
+            done()
+          })
+        })
+
+        const code5 = "CORRECTION_ADD_ATTACHMENT"
+        describe('...followed by the quick reply "' + code5 + '"', function() {
+          // const expectedFragment = "I've now remembered that for you!"
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotQuickReply(sender, code5)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should add an attachment to the memory', function(done) {
+            assert(resultList[resultList.length-1].memories[0].attachments && resultList[resultList.length-1].memories[0].attachments.length)
+            done()
+          })
+        })
+
+        const code1b = "USER_FEEDBACK_BOTTOM"
+        const code6 = "CORRECTION_STORE_TO_QUERY"
+        describe('...followed by the quick reply "' + code1b + '", then the quick reply "' + code6 + '"', function() {
+          // const expectedFragment = "I've now remembered that for you!"
+
+          before(function() {
+            const d = Q.defer()
+            setTimeout(function() {
+              sendChatbotQuickReply(sender, code1b)
+              .then(function(res) {
+                resultList.push(res)
+                sendChatbotQuickReply(sender, code6)
+                .then(function(res1) {
+                  resultList.push(res1)
+                  d.resolve()
+                }).catch(function(e) {
+                  d.reject(e)
+                })
+              }).catch(function(e) {
+                d.reject(e)
+              })
+            },5000)
+            return d.promise
+          });
+
+          it('should delete the memory just stored'
+            // , function(done) {
+            //   checkMemoryExistence(resultList[resultList.length-1].memories[0].objectID)
+            //   .then(function(result) {
+            //     assert(!result)
+            //     done()
+            //   })
+            // }
+          )
+          it('should be interpreted as a "query" or "Default Fallback Intent"', function(done) {
+            assert(resultList[resultList.length-1].requestData.metadata.intentName == 'query' || resultList[resultList.length-1].requestData.metadata.intentName == 'Default Fallback Intent')
+            done()
+          })
+        })
+
+        const code7 = "CORRECTION_CAROUSEL"
+        describe('...followed by the quick reply "' + code1 + '", then the quick reply "' + code7 + '"', function() {
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotQuickReply(sender, code1b)
+            .then(function(res) {
+              resultList.push(res)
+              sendChatbotQuickReply(sender, code7)
+              .then(function(res1) {
+                resultList.push(res1)
+                d.resolve()
+              }).catch(function(e) {
+                d.reject(e)
+              })
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should show a carousel', function(done) {
+            assert(resultList[resultList.length-1].messageData.message && resultList[resultList.length-1].messageData.message.attachment && resultList[resultList.length-1].messageData.message.attachment.payload && resultList[resultList.length-1].messageData.message.attachment.payload.elements)
+            done()
+          })
+        })
+      })
+
+
+      describe('Send an attachment, hold it and then create the memory to add it to', function() {
+        var resultList = []
+
+        const attachment1 = 'https://unsplash.it/200/300/?random'
+        describe('Send the attachment "' + attachment1 + '"', function() {
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotAttachments(sender, attachment1, 'image')
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should bring back quick reply options', function(done) {
+            assert(resultList[resultList.length-1].messageData.message.quick_replies && resultList[resultList.length-1].messageData.message.quick_replies.length)
+            done()
+          })
+        })
+
+        const code1 = "PREPARE_ATTACHMENT"
+        describe('...followed by the quick reply "' + code1 + '"', function() {
+          const expectedFragment = "Sure thing - type your message below and I'll attach it..."
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotQuickReply(sender, code1)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should be say type your message below', function(done) {
+            assert(resultList[resultList.length-1].messageData.message.text.indexOf(expectedFragment) > -1)
+            done()
+          })
+        })
+
+        const message1 = "This is my favourite random photo of all time"
+        describe('...followed by the message "' + message1 + '"', function() {
+          const expectedFragment1 = "I've now remembered that for you!"
+          const expectedFragment2 = "favourite random photo"
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotRequest(sender, message1)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should be say it\s remembered it for you', function(done) {
+            assert(resultList[resultList.length-1].messageData.message.text.indexOf(expectedFragment1) > -1)
+            done()
+          })
+          it('should have the message included', function(done) {
+            assert(resultList[resultList.length-1].memories[0].sentence.indexOf(expectedFragment2) > -1)
+            done()
+          })
+          it('should have an attachment included', function(done) {
+            assert(resultList[resultList.length-1].memories[0].attachments && resultList[resultList.length-1].memories[0].attachments.length)
+            done()
+          })
+        })
       })
     })
   });

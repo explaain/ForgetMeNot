@@ -1,7 +1,7 @@
 //@TODO: figure out sending typing on/off
 //@TODO: figure out first message after Get started
 //@TODO: Refactor onboarding
-//@TODO: Carousel
+//@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
 //@TODO:
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
@@ -140,38 +140,28 @@ exports.handleMessage = function(body) {
 					}
 					setContext(sender, 'expectingAttachment', null);
 				} else if ((attachments = event.message.attachments)) {
-					const type = attachments[0].type;
-					const url = (type=='fallback') ? attachments[0].url : attachments[0].payload.url;
-					setContext(sender, 'holdingAttachment', {
-						type: type,
-						url: url,
-						userID: sender
-					});
-          const quickReplies = [
-            ["⤴️ Previous", "CORRECTION_ADD_ATTACHMENT"],
-            ["⤵️ Next", "PREPARE_ATTACHMENT"],
-          ];
-					createTextMessage(sender, "Did you want me to add this " + type + " to the previous message or the next one?", 0, quickReplies)
+					firstPromise = prepareAttachments({sender: sender}, attachments)
 				}
 			}
 
 			firstPromise
 			.then(function(res) {
-				logger.log(res)
-				if (res.memories)
+				if (res.memories) { //Not sure if this is the right condition?
 					setContext(sender, 'lastAction', res)
-				d.resolve(sendResponseMessage(res))
+				}
+				const responseMessage = getResponseMessage(res)
+				d.resolve(responseMessage)
 			}).catch(function(e) {
 				logger.error(e)
 				d.reject(e)
-			})
+			}).done()
 
 			// .then(function(res) {
 			// 	logger.log(res)
 			// 	result = res
 			// }).catch(function(e) {
 			// 	logger.error(e);
-			// 	tryCarousel(sender, message)
+			// 	getCarousel(sender, message)
 			// 	.then(function() {
 			//
 			// 	}).catch(function(e) {
@@ -218,66 +208,66 @@ const handleQuickReplies = function(requestData, quickReply) {
 	const sender = requestData.sender
 	switch (quickReply.payload) {
 		case "USER_FEEDBACK_MIDDLE":
-			messageData = sendCorrectionMessage(sender)
+			var messageData = sendCorrectionMessage(sender)
 			d.resolve({requestData: requestData, messageData: messageData})
 			break;
 
 		case "USER_FEEDBACK_BOTTOM":
-			messageData = sendCorrectionMessage(sender)
+			var messageData = sendCorrectionMessage(sender)
 			d.resolve({requestData: requestData, messageData: messageData})
 			break;
 
 		case "CORRECTION_STORE_TO_QUERY":
-			api.acceptRequest({sender: sender, intent: 'deleteMemory', objectID: getContext(sender, 'lastAction').memories[0].objectID})
-			// deleteFromDb(sender, getContext(sender, 'lastAction').memories[0].objectID)
+			api.deleteMemories(sender, getContext(sender, 'lastAction').memories[0].objectID)
 			.then(function() {
-				return intentConfidence(sender, getContext(sender, 'lastAction').requestData.sentence, {intent: 'query'})
+				return intentConfidence(sender, getContext(sender, 'lastAction').requestData.resolvedQuery, {intent: 'query'})
 			}).then(function(res) {
-				setContext(sender, 'lastAction', res)
-				d.resolve(res) // IS THIS RIGHT???
+				d.resolve(res)
+			}).catch(function(e) {
+				logger.error(e)
+				d.reject(e)
 			})
 			break;
 
 		case "CORRECTION_QUERY_TO_STORE":
-			intentConfidence(sender, text, {intent: 'storeMemory'})
+			intentConfidence(sender, getContext(sender, 'lastAction').requestData.resolvedQuery, {intent: 'storeMemory'})
 			.then(function(res) {
-				setContext(sender, 'lastAction', res)
-				sendResponseMessage(res)
 				d.resolve(res)
+			}).catch(function(e) {
+				logger.error(e)
+				d.reject(e)
 			})
 			break;
 
 		case "CORRECTION_QUERY_DIFFERENT":
-			intentConfidence(sender, text, {hitNum: getContext(sender, 'lastAction').requestData.hitNum+1})
-			.then(function(res) {
-				setContext(sender, 'lastAction', res)
-				d.resolve(res)
-			})
+			const data = getContext(sender, 'lastAction')
+			data.requestData.hitNum = data.requestData.hitNum+1 || 1
+			delete data.messageData
+			d.resolve(data)
 			break;
 
 		case "CORRECTION_ADD_ATTACHMENT":
 			const updatedMemory = getContext(sender, 'lastAction').memories[0]
-			updatedMemory.attachments = [getContext(sender, 'holdingAttachment')];
-
-			//THIS WILL NOT WORK
-			saveMemory(sender, updatedMemory)
-			.then(function(memory) {
-				if (getContext(sender, 'holdingAttachment')) setContext(sender, 'holdingAttachment', null);
-				getContext(sender, 'lastAction') = memory;
-				return sendResponseMessage(sender, memory)
+			if (getContext(sender, 'holdingAttachment')) {
+				updatedMemory.attachments = [getContext(sender, 'holdingAttachment')]
+				updatedMemory.hasAttachments = true
+				setContext(sender, 'holdingAttachment', null)
+			} else {
+				logger.error('No attachment found')
+				d.reject('No attachment found')
+			}
+			intentConfidence(sender, updatedMemory.sentence, updatedMemory)
+			.then(function(res) {
+				d.resolve(res)
 			}).catch(function(e) {
-				logger.trace(e);
+				logger.error(e)
 				d.reject(e)
-			});
+			})
 			break;
 
 		case "CORRECTION_CAROUSEL":
-			tryCarousel(sender, getContext(sender, 'lastAction').requestData.sentence)
-			.then(function() {
-				d.resolve(memory)
-			}).catch(function(e) {
-				return giveUp(sender);
-			})
+			var messageData = getCarousel(sender, getContext(sender, 'lastAction').memories)
+			d.resolve({requestData: requestData, messageData: messageData})
 			break;
 
 		case "CORRECTION_GET_DATETIME":
@@ -291,15 +281,38 @@ const handleQuickReplies = function(requestData, quickReply) {
 			break;
 
 		case "PREPARE_ATTACHMENT":
-			return createTextMessage(sender, "Sure thing - type your message below and I'll attach it...", 0, []);
+			var messageData = createTextMessage(sender, "Sure thing - type your message below and I'll attach it...", 0, [])
+			d.resolve({requestData: requestData, messageData: messageData})
 			break;
 
 		default:
+			logger.error()
 			d.reject()
 			break;
 	}
 	return d.promise
 }
+
+const prepareAttachments = function(requestData, attachments) {
+	logger.trace(prepareAttachments)
+	const d = Q.defer()
+	const type = attachments[0].type;
+	const url = (type=='fallback') ? attachments[0].url : attachments[0].payload.url;
+	setContext(sender, 'holdingAttachment', {
+		type: type,
+		url: url,
+		userID: sender
+	});
+	const quickReplies = [
+		["⤴️ Previous", "CORRECTION_ADD_ATTACHMENT"],
+		["⤵️ Next", "PREPARE_ATTACHMENT"],
+	];
+	const messageData = createTextMessage(sender, "Did you want me to add this " + type + " to the previous message or the next one?", 0, quickReplies)
+	d.resolve({requestData: requestData, messageData: messageData})
+	return d.promise
+}
+
+
 
 function giveUp(sender) {
 	logger.trace(giveUp)
@@ -388,8 +401,8 @@ function createTextMessage(recipientId, messageText, quickReplies) {
 	logger.trace(messageData)
   return messageData
 }
-function sendCarouselMessage(recipientId, elements, delay, quickReplies) {
-	logger.trace(sendCarouselMessage);
+function getCarouselMessage(recipientId, elements, delay, quickReplies) {
+	logger.trace(getCarouselMessage);
 	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘');
 	// messageText = messageText.replace(/"/g, '\"').replace(/'/g, '\'').replace(/\//g, '\/').replace(/‘/g, '\‘').replace(/’/g, '\’').replace(/’/g, '\’');
   var messageData = {
@@ -407,7 +420,7 @@ function sendCarouselMessage(recipientId, elements, delay, quickReplies) {
 		}
   };
 	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
-  return d.resolve(messageData)
+  return messageData
 }
 function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
 	logger.trace(sendAttachmentMessage);
@@ -464,25 +477,6 @@ function sendCorrectionMessage(recipientId) {
 			break;
 	}
   return messageData
-}
-function sendAttachmentUpload(recipientId, attachmentType, attachmentUrl) {
-	logger.trace(sendAttachmentUpload);
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-			attachment: {
-	      type: attachmentType,
-	      payload: {
-	        url: attachmentUrl,
-					'is_reusable': true
-	      }
-	    }
-    }
-  };
-	// This won't work as trying to resolve with more than one argument
-  return d.resolve(messageData, 0, properties.facebook_message_attachments_endpoint); /* @TODO: will this work? */
 }
 
 function firstMessage(recipientId) {
@@ -554,27 +548,34 @@ function fetchUserDataFromFacebook(recipientId) {
 
 
 
-function intentConfidence(sender, message) {
+function intentConfidence(sender, message, extraData) {
 	logger.trace(intentConfidence);
 	const d = Q.defer()
-	logger.log({sender: sender, text: message})
-  api.acceptRequest({sender: sender, text: message})
+	const data = extraData || {};
+	data.sender = sender
+	data.text = message
+	if (getContext(sender, 'holdingAttachment')) {
+		data.attachments = [getContext(sender, 'holdingAttachment')]
+		data.hasAttachments = true
+		setContext(sender, 'holdingAttachment', null)
+	}
+  api.acceptRequest(data)
   .then(function(res) {
 		if (res.requestData.intent == "Default Fallback Intent")
 			res.requestData.intent = 'query'
-		logger.log(res)
 		d.resolve(res)
   }).catch(function(e) {
     logger.error(e);
-    tryCarousel(sender, message)
+		const err = (e==404) ? 500 : e
+		d.reject(err)
   })
 	return d.promise
 }
 
-const sendResponseMessage = function(result) {
+const getResponseMessage = function(result) {
+	logger.trace();
 	const sender = result.requestData.sender
 	var m = result.memories ? result.memories[0] : null
-	logger.trace(sendResponseMessage);
 	logger.log(m)
 	switch (result.statusCode) {
 		case 200:
@@ -584,6 +585,13 @@ const sendResponseMessage = function(result) {
 				case 'query':
 					setContext(sender, 'lastResults', result.memories)
 					setContext(sender, 'lastResultTried', 0)
+					if (result.requestData.carousel) {
+						// @TODO: Send carousel
+					} else if (result.memories.length - (result.requestData.hitNum || 0) > 0) {
+						m = result.memories[(result.requestData.hitNum || 0)]
+					} else {
+						// @TODO: Send message: Can't find anything
+					}
 					m.resultSentence = m.sentence;
 					break;
 
@@ -660,36 +668,20 @@ const sendResponseMessage = function(result) {
 }
 
 
-const tryCarousel = function(sender, message, cards) {
-	const d = Q.defer()
-	searchDb(AlgoliaIndex,
-		{
-			query: message,
-			filters: 'userID: ' + sender,
-			hitsPerPage: 10
-		}
-	).then(function(content) {
-		if (content.hits.length) {
-			const elements = content.hits.map(function(card) {
-				return {
-					title: card.sentence,
-					subtitle: ' ',
-					image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://res.cloudinary.com/forgetmenot/image/upload/v1504715822/carousel_sezreg.png'
-				}
-			})
-			sendCarouselMessage(sender, elements, 0, [])
-			.then(function() {
-				d.resolve()
-			})
-		} else {
-			logger.trace('rejecting carousel');
-			d.reject();
-		}
-	}).catch(function(e) {
-		logger.trace(e);
-		d.reject(e)
-	})
-	return d.promise
+const getCarousel = function(sender, memories) {
+	if (memories.length) {
+		const elements = memories.map(function(card) {
+			return {
+				title: card.sentence,
+				subtitle: ' ',
+				image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://res.cloudinary.com/forgetmenot/image/upload/v1504715822/carousel_sezreg.png'
+			}
+		})
+		return getCarouselMessage(sender, elements, 0, [])
+	} else {
+		logger.trace('No memories - rejecting carousel');
+		throw new Error(404)
+	}
 }
 // -------------------------------------------- //
 
