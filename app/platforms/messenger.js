@@ -4,7 +4,7 @@
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
 
-var chatbotController = require('../controller/chatbot');
+const chatbotController = require('../controller/chatbot');
 
 const request = require('request');
 const properties = require('../config/properties.js');
@@ -31,6 +31,20 @@ exports.tokenVerification = function(req, res) {
   }
 }
 
+
+const receiveMessagesToSend = function(data) {
+  const d = Q.defer()
+  handleMessageGroup(data)
+  .then(function(res) {
+    d.resolve(res)
+  }).catch(function(e) {
+    logger.error(e)
+    d.reject(e)
+  })
+  return d.promise
+}
+
+chatbotController.acceptClientMessageFunction(receiveMessagesToSend)
 
 
 const requestPromise = function(params) {
@@ -104,19 +118,33 @@ exports.handleMessage = function(req, res) {
   logger.trace()
   // logger.log(req)
   chatbotController.handleMessage(req.body)
-  .then(function(result) {
-    logger.trace()
-    logger.log(result)
-    if (result && result.messageData) {
-      result.messageData.forEach(function(singleMessage) {
-        prepareAndSendMessages(singleMessage.data, singleMessage.delay || 0, properties.facebook_message_endpoint)
-      })
-    }
+  .then(function(res) {
+    logger.log(res)
+    return handleMessageGroup(res)
+  }).then(function() {
     res.sendStatus(200);
   }).catch(function(e) {
     logger.error(e)
     res.sendStatus(400);
   })
+}
+
+const handleMessageGroup = function(result) {
+  const d = Q.defer();
+  const promises = []
+  if (result && result.messageData) {
+    result.messageData.forEach(function(singleMessage) {
+      promises.push(prepareAndSendMessages(singleMessage.data, singleMessage.delay || 0, properties.facebook_message_endpoint))
+    })
+  }
+  Q.allSettled(promises)
+  .then(function() {
+    d.resolve()
+  }).catch(function(e) {
+    logger.error(e)
+    d.reject(e)
+  })
+  return d.promise;
 }
 
 
@@ -140,6 +168,7 @@ function prepareAndSendMessages(messageData, delay, endpoint) {
   logger.trace()
 	Q.allSettled(
 		messageDataArray.map(function(message, i, array) {
+      if (message.message.attachment) i = Math.max(i-1, 0) // Stop attachements from delaying before sending
 			return sendMessageAfterDelay(message, delay + i*2000, endpoint);
 		})
 	).then(function(results) {
@@ -185,9 +214,8 @@ function splitChunk(message, limit) {
 
 function sendMessageAfterDelay(message, delay, endpoint) {
 	logger.trace(sendMessageAfterDelay);
-	logger.info(delay, message)
 	const d = Q.defer();
-	if (!message.sender_action) sendSenderAction(sender, 'typing_on');
+	if (!message.sender_action) sendSenderAction(message.recipient.id, 'typing_on');
 	setTimeout(function() {
 		callSendAPI(message, endpoint)
 		.then(function(body) {

@@ -1,7 +1,8 @@
 //TODO: uncomment rescheduleAllReminders();
 //TODO: intent 'nextResult'
 //TODO: give up
-//TODO: scheduleReminder
+//TODO: reminders that are too soon
+//TODO: reminders when clocks differ between devices
 
 const request = require('request');
 const Q = require("q");
@@ -43,8 +44,10 @@ const rescheduleAllReminders = function() {
 	searchDb(AlgoliaIndex, searchParams)
 	.then(function(content) {
 		const reminders = content.hits
+    logger.trace('--- Reminders Rescheduled: ---\n\n')
 		reminders.forEach(function(r) {
 			scheduleReminder(r);
+      logger.trace(r.actionSentence, ' (' + r.triggerDateTime + ')')
 		})
 	}).catch(function(e) {
 		logger.error(e);
@@ -53,6 +56,30 @@ const rescheduleAllReminders = function() {
 
 
 
+
+var clientMessageFunction;
+exports.acceptClientMessageFunction = function(messageFunction) {
+	clientMessageFunction = messageFunction
+}
+
+// For sending standalone messages
+const sendClientMessage = function(data) {
+	const d = Q.defer()
+	if (clientMessageFunction) {
+		clientMessageFunction(data)
+		.then(function(res) {
+			d.resolve(res)
+		}).catch(function(e) {
+			logger.error(e)
+			d.reject(e)
+		})
+	} else {
+		const e = 'No clientMessageFunction defined'
+		logger.error(e)
+		d.reject(e)
+	}
+	return d.promise
+}
 
 
 exports.deleteMemories = function(sender, objectID) {
@@ -573,11 +600,21 @@ const backupAttachment = function(recipientId, attachmentType, attachmentUrl) {
 
 
 const scheduleReminder = function(memory) {
-	// logger.trace(scheduleReminder)
-	// schedule.scheduleJob(memory.triggerDateTime, function(){
-	// 	sendTextMessage(memory.reminderRecipient || memory.userID, '🔔 Reminder! ' + memory.actionSentence)
-	// 	logger.trace('Reminder!', memory.actionSentence);
-	// });
+	logger.trace(scheduleReminder)
+	schedule.scheduleJob(memory.triggerDateTime, function(){
+    delete memory.resultSentence
+    const data = {
+      requestData: {
+        sender: memory.reminderRecipient || memory.userID,
+        intent: 'reminder.dateTime'
+      },
+      memories: [
+        memory
+      ]
+    }
+    sendClientMessage(data)
+		logger.trace('Reminder!', memory.actionSentence);
+	});
 }
 
 
@@ -728,4 +765,4 @@ const getGeneralIntent = function(intent) {
 }
 
 
-// rescheduleAllReminders();
+rescheduleAllReminders();

@@ -58,8 +58,45 @@ var increaseContext = function(sender, context) {
 }
 
 
+var clientMessageFunction;
+exports.acceptClientMessageFunction = function(messageFunction) {
+	clientMessageFunction = messageFunction
+}
+
+// For sending standalone messages
+const sendClientMessage = function(data) {
+	const d = Q.defer()
+	if (clientMessageFunction) {
+		clientMessageFunction(data)
+		.then(function(res) {
+			d.resolve(res)
+		}).catch(function(e) {
+			logger.error(e)
+			d.reject(e)
+		})
+	} else {
+		const e = 'No clientMessageFunction defined'
+		logger.error(e)
+		d.reject(e)
+	}
+	return d.promise
+}
 
 
+const receiveMessageToSend = function(data) {
+  const d = Q.defer()
+	try {
+		logger.info('Received message: ', data)
+		const responseMessage = data ? getResponseMessage(data) : null
+		sendClientMessage(data)
+		d.resolve(responseMessage)
+	} catch(e){
+		logger.error(e)
+		d.reject(e)
+	}
+  return d.promise
+}
+api.acceptClientMessageFunction(receiveMessageToSend)
 
 
 /* Get user information */
@@ -146,7 +183,6 @@ exports.handleMessage = function(body) {
 				}
 			}
 
-			logger.info(firstPromise)
 			firstPromise
 			.then(function(res) {
 				if (res && res.memories) { //Not sure if this is the right condition?
@@ -582,12 +618,13 @@ const getResponseMessage = function(result) {
 	logger.trace();
 	const sender = result.requestData.sender
 	var m = result.memories ? result.memories[0] : null
-	logger.log(m)
+	const intent = result.requestData.intent
+	if (!result.statusCode) result.statusCode = 200
 	switch (result.statusCode) {
 		case 200:
 			logger.trace()
 
-			switch (result.requestData.intent) {
+			switch (intent) {
 				case 'query':
 					setContext(sender, 'lastResults', result.memories)
 					setContext(sender, 'lastResultTried', 0)
@@ -619,13 +656,24 @@ const getResponseMessage = function(result) {
 
 					break;
 
+				case 'reminder.URL':
+					m.resultSentence = '🔔 Reminder! ' + m.actionSentence
+					break;
+
+				case 'reminder.dateTime':
+					m.resultSentence = '🔔 Reminder! ' + m.actionSentence
+					break;
+
 				default:
-					result.messageData = [{data: sendGenericMessage(result.requestData.sender, result.requestData.intent)}]
+					if (!result.messageData) {
+						result.messageData = [{data: sendGenericMessage(result.requestData.sender, intent)}]
+					}
+					break;
 			}
 			break;
 
 		case 412:
-			switch (result.requestData.intent) {
+			switch (intent) {
 				case 'setTask.URL':
 					setContext(sender, 'lastAction', result);
 					var quickReplies = [
