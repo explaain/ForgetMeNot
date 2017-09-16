@@ -2,6 +2,8 @@
 //@TODO: Refactor onboarding
 //@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
 //@TODO: provideURL and provideDateTime
+//@TODO: give up message
+
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
 
@@ -144,6 +146,7 @@ exports.handleMessage = function(body) {
 				}
 			}
 
+			logger.info(firstPromise)
 			firstPromise
 			.then(function(res) {
 				if (res && res.memories) { //Not sure if this is the right condition?
@@ -263,13 +266,15 @@ const handleQuickReplies = function(requestData, quickReply) {
 			break;
 
 		case "CORRECTION_GET_DATETIME":
-			return createTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
+			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
 			// setContext(sender, 'apiaiContext', 'provideDateTime')
+			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "CORRECTION_GET_URL":
-			return createTextMessage(sender, "Sure thing - what's the url?", 0, []);
+			var messageData = createTextMessage(sender, "Sure thing - what's the url?", 0, []);
 			// setContext(sender, 'apiaiContext', 'provideURL')
+			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "PREPARE_ATTACHMENT":
@@ -617,6 +622,7 @@ const getResponseMessage = function(result) {
 				default:
 					result.messageData = [{data: sendGenericMessage(result.requestData.sender, result.requestData.intent)}]
 			}
+			break;
 
 		case 412:
 			switch (result.requestData.intent) {

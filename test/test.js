@@ -196,16 +196,36 @@ describe('Bulk', function() {
       })
     })
 
-
     describe('Date/Time-based Reminders', function() {
-      const message2 = "Remind me at 5pm to feed the cat"
+
+      const message2 = "Remind me to feed the cat in 5 mins"
       describe('Sending the message "' + message2 + '"', function() {
+        const expectedIntent = "setTask.dateTime"
+
+        const results = {};
+        before(function(done) {
+          sendApiRequest(sender, message2, results, done)
+        });
+
+        it('should be interpreted as a ' + expectedIntent, function(done) {
+          assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+          done()
+        })
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          logger.trace(results.body.memories[0])
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+      })
+
+      const message2a = "Remind me at 5pm to feed the cat"
+      describe('Sending the message "' + message2a + '"', function() {
         const expectedIntent = "setTask.dateTime"
         const expectedDateTimeNum = 1505620800000
 
         const results = {};
         before(function(done) {
-          sendApiRequest(sender, message2, results, done)
+          sendApiRequest(sender, message2a, results, done)
         });
 
         it('should be interpreted as a ' + expectedIntent, function(done) {
@@ -349,6 +369,31 @@ describe('Bulk', function() {
       })
     })
 
+    const message2 = "Remind me to feed the cat in 5 mins"
+    describe('Sending the message "' + message2 + '"', function() {
+      const expectedIntent = "setTask.dateTime"
+      const expectedFragment = "I've now set that reminder for you!"
+
+      const results = {};
+      before(function(done) {
+        sendChatbotRequest(sender, message2, results, done)
+      });
+
+      it('should be interpreted as a ' + expectedIntent, function(done) {
+        assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+        done()
+      })
+      it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+        logger.trace(results.body.memories[0])
+        assert(results.body.memories[0].triggerDateTime)
+        done()
+      })
+      it('should be say it\'s set that reminder for you', function(done) {
+        assert(results.body.messageData[0].data.message.text.indexOf(expectedFragment) > -1)
+        done()
+      })
+    })
+
 
 
 
@@ -479,6 +524,7 @@ describe('Bulk', function() {
             assert(resultList[resultList.length-1].memories[0].attachments && resultList[resultList.length-1].memories[0].attachments.length)
             done()
           })
+          it('should backup the attachment to Cloudinary')
         })
 
         const code1b = "USER_FEEDBACK_BOTTOM"
@@ -738,6 +784,14 @@ describe('Bulk', function() {
     describe('Store a memory with an attachment', function() {
       it('should store the memory plus attachment')
       it('should return the memory plus attachment in multiple parts')
+    })
+    describe('Set a dateTime reminder', function() {
+      it('should store the memory')
+      it('should set the reminder')
+      it('should somehow ping the reminder back???')
+    })
+    describe('Set a URL-based reminder', function() {
+      it('should store the memory')
     })
   })
 

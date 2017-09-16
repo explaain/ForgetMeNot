@@ -1,5 +1,7 @@
 //TODO: uncomment rescheduleAllReminders();
 //TODO: intent 'nextResult'
+//TODO: give up
+//TODO: scheduleReminder
 
 const request = require('request');
 const Q = require("q");
@@ -99,6 +101,8 @@ const routeByIntent = function(requestData) {
     if (requestData.objectID) memory.objectID = requestData.objectID;
     logger.log(memory)
   }
+  // if (requestData.intent == 'provideURL') requestData.intent = 'setTask.URL'
+  // if (requestData.intent == 'provideDateTime') requestData.intent = 'setTask.dateTime'
   const data = {requestData: requestData, memories: [memory]}
 	try {
 	} catch(e) {
@@ -569,11 +573,11 @@ const backupAttachment = function(recipientId, attachmentType, attachmentUrl) {
 
 
 const scheduleReminder = function(memory) {
-	logger.trace(scheduleReminder)
-	schedule.scheduleJob(memory.triggerDateTime, function(){
-		sendTextMessage(memory.reminderRecipient || memory.userID, '🔔 Reminder! ' + memory.actionSentence)
-		logger.trace('Reminder!', memory.actionSentence);
-	});
+	// logger.trace(scheduleReminder)
+	// schedule.scheduleJob(memory.triggerDateTime, function(){
+	// 	sendTextMessage(memory.reminderRecipient || memory.userID, '🔔 Reminder! ' + memory.actionSentence)
+	// 	logger.trace('Reminder!', memory.actionSentence);
+	// });
 }
 
 
