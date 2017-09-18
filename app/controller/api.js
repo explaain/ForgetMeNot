@@ -764,7 +764,7 @@ const getEmojis = function(text, entities, max, strict) {
 		if (words) text = words.join(' ')
 	}
 
-	return (emoji.translate(text, true).substring(0, 2) || '✅')
+	return (emoji.translate(text.replace(/[0-9]/g, ''), true).substring(0, 2) || '✅')
 }
 
 
