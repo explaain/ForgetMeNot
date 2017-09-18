@@ -3,6 +3,7 @@
 //@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
 //@TODO: provideURL and provideDateTime
 //@TODO: give up message
+//@TODO: click on carousel element to get full memory
 
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
@@ -614,28 +615,29 @@ function intentConfidence(sender, message, extraData) {
 	return d.promise
 }
 
-const getResponseMessage = function(result) {
+const getResponseMessage = function(data) {
 	logger.trace();
-	const sender = result.requestData.sender
-	var m = result.memories ? result.memories[0] : null
-	const intent = result.requestData.intent
-	if (!result.statusCode) result.statusCode = 200
-	switch (result.statusCode) {
+	const sender = data.requestData.sender
+	var m = data.memories ? data.memories[0] : null
+	const intent = data.requestData.intent
+	if (!data.statusCode) data.statusCode = 200
+	switch (data.statusCode) {
 		case 200:
 			logger.trace()
 
 			switch (intent) {
 				case 'query':
-					setContext(sender, 'lastResults', result.memories)
+					setContext(sender, 'lastResults', data.memories)
 					setContext(sender, 'lastResultTried', 0)
-					if (result.requestData.carousel) {
+					if (data.requestData.carousel) {
 						// @TODO: Send carousel
-					} else if (result.memories.length - (result.requestData.hitNum || 0) > 0) {
-						m = result.memories[(result.requestData.hitNum || 0)]
+					} else if (data.memories.length - (data.requestData.hitNum || 0) > 0) {
+						m = data.memories[(data.requestData.hitNum || 0)]
+						m.resultSentence = m.sentence;
 					} else {
 						// @TODO: Send message: Can't find anything
+						data.messageData = [{data: createTextMessage(sender, {text: 'Sorry I couldn\'t find any memories related to that!'})}]
 					}
-					m.resultSentence = m.sentence;
 					break;
 
 				case 'storeMemory':
@@ -665,8 +667,8 @@ const getResponseMessage = function(result) {
 					break;
 
 				default:
-					if (!result.messageData) {
-						result.messageData = [{data: sendGenericMessage(result.requestData.sender, intent)}]
+					if (!data.messageData) {
+						data.messageData = [{data: sendGenericMessage(data.requestData.sender, intent)}]
 					}
 					break;
 			}
@@ -675,7 +677,7 @@ const getResponseMessage = function(result) {
 		case 412:
 			switch (intent) {
 				case 'setTask.URL':
-					setContext(sender, 'lastAction', result);
+					setContext(sender, 'lastAction', data);
 					var quickReplies = [
 						["🖥 URL", "CORRECTION_GET_URL"],
 						["📂 Just store", "CORRECTION_QUERY_TO_STORE"],
@@ -684,7 +686,7 @@ const getResponseMessage = function(result) {
 					break;
 
 				case 'setTask.dateTime':
-					setContext(sender, 'lastAction', result);
+					setContext(sender, 'lastAction', data);
 					var quickReplies = [
 						["⏱ Date/time", "CORRECTION_GET_DATETIME"],
 						["📂 Just store", "CORRECTION_QUERY_TO_STORE"],
@@ -700,20 +702,20 @@ const getResponseMessage = function(result) {
 			break;
 	}
 	logger.log(m)
-	if (!result.messageData && m) {
+	if (!data.messageData && m) {
 		m = prepareResult(sender, m)
-		result.messageData = [{data: createTextMessage(sender, {text: m.resultSentence, attachment: m.attachments && m.attachments[0] || null}, quickReplies)}]
+		data.messageData = [{data: createTextMessage(sender, {text: m.resultSentence, attachment: m.attachments && m.attachments[0] || null}, quickReplies)}]
 	}
 
 	// ???
-	if (result.messageData && result.messageData[0] && result.messageData[0].data && result.messageData[0].data.message && !getContext(result.messageData[0].data.recipient.id, 'failing')) {
-		setContext(result.messageData[0].data.recipient.id, 'consecutiveFails', 0)
+	if (data.messageData && data.messageData[0] && data.messageData[0].data && data.messageData[0].data.message && !getContext(data.messageData[0].data.recipient.id, 'failing')) {
+		setContext(data.messageData[0].data.recipient.id, 'consecutiveFails', 0)
 	}
 
 
-	logger.log(result)
+	logger.log(data)
 
-	return result
+	return data
 	// .then(function(data) {
 	// 	messageData = data
 	// 	return getContext(sender, 'onboarding') ? createTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, []) : Q.fcall(function() {return null});

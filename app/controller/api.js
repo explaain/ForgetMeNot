@@ -1,4 +1,3 @@
-//TODO: uncomment rescheduleAllReminders();
 //TODO: intent 'nextResult'
 //TODO: give up
 //TODO: reminders that are too soon
@@ -159,11 +158,13 @@ const routeByIntent = function(requestData) {
 				recallMemory(requestData)
 				.then(function(memories) {
 					logger.log(memories)
-					data.memories = memories;
+          if (memories.length == 0)
+            logger.trace(404, 'No results found')
+          data.memories = memories;
 					d.resolve(data)
 				}).catch(function(e) {
-					logger.error(e);
-					d.reject(e)
+          logger.error(e);
+          d.reject(e)
 				})
 			} catch (e) {
 				logger.error(e);
@@ -338,11 +339,12 @@ const recallMemory = function(requestData) {
 		};
 		return searchDb(AlgoliaIndex, searchParams)
 	}).then(function(content) {
-		if (content.hits.length) {
-			d.resolve(content.hits)
-		} else {
-      logger.error('No results found')
-			d.reject(404);
+		if (!content.hits.length) {
+      logger.trace('No results found')
+    }
+    d.resolve(content.hits)
+    //  else {
+			// d.reject(404);
 			// tryCarousel(sender, memory.sentence)
 			// .then(function() {
 			// 	return Q.fcall(function() {return null});
@@ -350,7 +352,7 @@ const recallMemory = function(requestData) {
 			// 	memory.failed = true;
 			// 	return sendTextMessage(sender, "Sorry, I can't remember anything" + ((hitNum && hitNum > 0) ? " else" : "") + " similar to that!")
 			// })
-		}
+		// }
 	// }).then(function() {
 	// 	return getContext(sender, 'onboarding') ? sendTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮", 1500, true) : Q.fcall(function() {return null});
 	// }).then(function() {
