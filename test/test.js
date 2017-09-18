@@ -114,6 +114,27 @@ const sendChatbotQuickReply = function(sender, code, results, done) {
   return sendRequest(apiFunction, data, results, done)
 }
 
+const sendChatbotPostback = function(sender, code, results, done) {
+  const data = {
+    entry: [
+      {
+        messaging: [
+          {
+            sender: {
+              id: sender
+            },
+            postback: {
+              payload: code
+            }
+          }
+        ]
+      }
+    ]
+  }
+  const apiFunction = chatbot.handleMessage
+  return sendRequest(apiFunction, data, results, done)
+}
+
 const sendChatbotAttachments = function(sender, code, results, done) {
   const data = {
     entry: [
@@ -452,11 +473,11 @@ describe('Bulk', function() {
 
 
     describe('Message sequences', function() {
-      const message1 = "What does my cat look like?"
+      const message1 = "What is my name?"
       const code1 = "USER_FEEDBACK_MIDDLE"
       describe('Recall different memories, change to storeMemory, add attachment, change back and then request Carousel', function() {
         var resultList = []
-        describe('Sending the message "' + message1 + '", followed by the quick reply "' + code1 + '"', function() {
+        describe('!...Sending the message "' + message1 + '", followed by the quick reply "' + code1 + '"', function() {
 
           before(function() {
             const d = Q.defer()
@@ -487,7 +508,7 @@ describe('Bulk', function() {
         })
 
         const code2 = "CORRECTION_QUERY_DIFFERENT"
-        describe('...followed by the quick reply "' + code2 + '"', function() {
+        describe('!...followed by the quick reply "' + code2 + '"', function() {
 
           before(function() {
             const d = Q.defer()
@@ -622,7 +643,8 @@ describe('Bulk', function() {
         })
 
         const code7 = "CORRECTION_CAROUSEL"
-        describe('...followed by the quick reply "' + code1 + '", then the quick reply "' + code7 + '"', function() {
+        var specificMemory;
+        describe('!...followed by the quick reply "' + code1 + '", then the quick reply "' + code7 + '"', function() {
 
           before(function() {
             const d = Q.defer()
@@ -643,7 +665,33 @@ describe('Bulk', function() {
           });
 
           it('should show a carousel', function(done) {
+            try {
+              specificMemory = resultList[resultList.length-1].messageData[0].data.message.attachment.payload.elements[2].sentence
+            } catch(e) {
+
+            }
             assert(resultList[resultList.length-1].messageData[0].data.message && resultList[resultList.length-1].messageData[0].data.message.attachment && resultList[resultList.length-1].messageData[0].data.message.attachment.payload && resultList[resultList.length-1].messageData[0].data.message.attachment.payload.elements)
+            done()
+          })
+        })
+
+        const code8 = "REQUEST_SPECIFIC_MEMORY-data-2"
+        describe('!...followed by a postback with payload "' + code8 + '"', function() {
+
+          before(function() {
+            const d = Q.defer()
+            sendChatbotPostback(sender, code8)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
+
+          it('should show the 3rd specific memory', function(done) {
+            assert.equal(resultList[resultList.length-1].messageData[0].data.message && resultList[resultList.length-1].messageData[0].data.message.attachment && resultList[resultList.length-1].messageData[0].data.message.attachment.payload && resultList[resultList.length-1].messageData[0].data.message.attachment.payload.elements && resultList[resultList.length-1].messageData[0].data.message.attachment.payload.elements[0] && resultList[resultList.length-1].messageData[0].data.message.attachment.payload.elements[0].title, specificMemory)
             done()
           })
         })

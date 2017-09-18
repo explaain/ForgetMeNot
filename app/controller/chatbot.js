@@ -26,7 +26,7 @@ const Randoms = require('../controller/cannedResponses.js').Randoms
 
 
 const tracer = require('tracer')
-const logger = tracer.colorConsole({level: 'info'});
+const logger = tracer.colorConsole({level: 'log'});
 // tracer.setLevel('error');
 
 //API.ai setup
@@ -130,9 +130,8 @@ exports.handleMessage = function(body) {
 			} catch (err) {}
 			logger.trace()
 			var firstPromise;
-			if (postback == 'GET_STARTED_PAYLOAD') {
-				//sendSenderAction(sender, 'typing_on');
-				firstMessage(sender);
+			if (postback) {
+				firstPromise = handlePostbacks({sender: sender}, postback)
 				logger.trace()
 			} else if (event.message) {
 				logger.trace(event.message)
@@ -208,8 +207,8 @@ exports.handleMessage = function(body) {
 			// })
 		});
 	} catch(e) {
-		logger.trace('-- Error processing the webhook! --')
-		logger.trace(e)
+		logger.error('-- Error processing the webhook! --')
+		logger.error(e)
 		d.reject(e)
 	}
 	return d.promise
@@ -240,10 +239,36 @@ curl -X POST -H "Content-Type: application/json" -d '{
 
 */
 
+const handlePostbacks = function(requestData, payload) {
+	const d = Q.defer()
+	const payloadCode = payload.split('-data-')[0]
+	const payloadData = payload.split('-data-')[1]
+	switch (payloadCode) {
+		case 'GET_STARTED_PAYLOAD':
+			//sendSenderAction(sender, 'typing_on');
+			firstMessage(sender); // Need to sort this
+			break;
+
+		case "REQUEST_SPECIFIC_MEMORY":
+			logger.info()
+			var data = getContext(sender, 'lastAction')
+			data.requestData.hitNum = parseInt(payloadData)
+			delete data.messageData
+			logger.info(data)
+			d.resolve(data)
+			break;
+
+		default:
+
+	}
+	return d.promise
+}
+
 const handleQuickReplies = function(requestData, quickReply) {
 	logger.trace(handleQuickReplies)
 	const d = Q.defer()
 	const sender = requestData.sender
+	logger.info(quickReply.payload)
 	switch (quickReply.payload) {
 		case "USER_FEEDBACK_MIDDLE":
 			var messageData = sendCorrectionMessage(sender)
@@ -278,7 +303,7 @@ const handleQuickReplies = function(requestData, quickReply) {
 			break;
 
 		case "CORRECTION_QUERY_DIFFERENT":
-			const data = getContext(sender, 'lastAction')
+			var data = getContext(sender, 'lastAction')
 			data.requestData.hitNum = data.requestData.hitNum+1 || 1
 			delete data.messageData
 			d.resolve(data)
@@ -741,13 +766,21 @@ const getResponseMessage = function(data) {
 
 const getCarousel = function(sender, memories) {
 	if (memories.length) {
-		const elements = memories.map(function(card) {
+		const elements = memories.map(function(card, i) {
 			return {
 				title: card.sentence,
 				subtitle: ' ',
-				image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://res.cloudinary.com/forgetmenot/image/upload/v1504715822/carousel_sezreg.png'
+				image_url: card.hasAttachments && card.attachments[0].url.indexOf('cloudinary') > -1 ? card.attachments[0].url : 'http://res.cloudinary.com/forgetmenot/image/upload/v1504715822/carousel_sezreg.png',
+        buttons: [
+          {
+            type:"postback",
+            title:"View full memory",
+            payload:"REQUEST_SPECIFIC_MEMORY-data-"+i
+          }
+        ]
 			}
 		})
+		logger.info(elements)
 		return getCarouselMessage(sender, elements, 0, [])
 	} else {
 		logger.trace('No memories - rejecting carousel');
