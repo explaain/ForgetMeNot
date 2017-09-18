@@ -1,6 +1,7 @@
 //TODO: delete Cloudinary images saved during tests
-//TODO: find better loggin system
+//TODO: find better logging system
 //TODO: + easy way to get logs before any error
+//TODO: add setTask test
 
 const Q = require("q");
 const assert = require('assert');

@@ -115,6 +115,7 @@ const routeByIntent = function(requestData) {
 	logger.trace(routeByIntent)
 	const d = Q.defer()
   var memory = {}
+  if (requestData.intent == 'setTask') requestData.intent = 'setTask.dateTime' //temporary
   requestData.generalIntent = getGeneralIntent(requestData.intent)
   if (requestData.generalIntent == 'write') {
     memory = getWrittenMemory(requestData)

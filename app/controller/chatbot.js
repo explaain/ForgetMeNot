@@ -1,14 +1,14 @@
 //@TODO: figure out first message after Get started
 //@TODO: Refactor onboarding
-//@TODO: provideURL and provideDateTime
 //@TODO: setTask (generic)
 // ---
+//@TODO: provideURL
 //@TODO: Make sure messageData.message.quick_replies is never existing yet empty!
 //@TODO: general error handling!
 //@TODO: always accept storeMemory after attachment (?)
-//@TODO: click on carousel element to get full memory
 //@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
 //@TODO: Don't do default quick replies when bot asks for info
+//@TODO: Have timeout on unresolved webhooks
 
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
@@ -26,7 +26,7 @@ const Randoms = require('../controller/cannedResponses.js').Randoms
 
 
 const tracer = require('tracer')
-const logger = tracer.colorConsole({level: 'log'});
+const logger = tracer.colorConsole({level: 'info'});
 // tracer.setLevel('error');
 
 //API.ai setup
@@ -250,11 +250,9 @@ const handlePostbacks = function(requestData, payload) {
 			break;
 
 		case "REQUEST_SPECIFIC_MEMORY":
-			logger.info()
 			var data = getContext(sender, 'lastAction')
 			data.requestData.hitNum = parseInt(payloadData)
 			delete data.messageData
-			logger.info(data)
 			d.resolve(data)
 			break;
 
@@ -268,7 +266,6 @@ const handleQuickReplies = function(requestData, quickReply) {
 	logger.trace(handleQuickReplies)
 	const d = Q.defer()
 	const sender = requestData.sender
-	logger.info(quickReply.payload)
 	switch (quickReply.payload) {
 		case "USER_FEEDBACK_MIDDLE":
 			var messageData = sendCorrectionMessage(sender)
@@ -385,7 +382,7 @@ function giveUp(sender) {
 	sendGenericMessage(sender, 'dunno', getContext(sender, 'consecutiveFails'));
 }
 
-function sendGenericMessage(recipientId, type, optionalCounter) {
+function sendGenericMessage(recipientId, type, counter) {
 	const d = Q.defer()
 	logger.trace(sendGenericMessage);
   // Bot didnt know what to do with message from user
@@ -396,7 +393,8 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
 		increaseContext(sender, 'totalFailCount')
 		if (getContext(sender, 'consecutiveFails') < 4) increaseContext(sender, 'consecutiveFails');
 	}
-	const text = (typeof optionalCounter!=undefined && Array.isArray(Randoms.texts[type][0])) ? Randoms.texts[type][optionalCounter] : Randoms.texts[type];
+	if (typeof counter!=undefined) counter = 0
+	const text = (Array.isArray(Randoms.texts[type][0])) ? Randoms.texts[type][counter] : Randoms.texts[type];
   var messageData = {
     recipient: {
       id: recipientId
@@ -412,7 +410,7 @@ function sendGenericMessage(recipientId, type, optionalCounter) {
 	if (false) {
 		try {
 			if (Randoms.gifs[type] && Math.floor(Math.random()*5)==0) { // (C[recipientId].totalFailCount < 5 || Math.floor(Math.random()*(C[recipientId].totalFailCount/4))==0 )) {
-				const gif = optionalCounter ? Randoms.gifs[type][optionalCounter] : Randoms.gifs[type];
+				const gif = (Array.isArray(Randoms.gifs[type][0])) ? Randoms.gifs[type][counter] : Randoms.gifs[type];
 				if (gif) {
 					var messageData2 = {
 						recipient: {
@@ -780,7 +778,6 @@ const getCarousel = function(sender, memories) {
         ]
 			}
 		})
-		logger.info(elements)
 		return getCarouselMessage(sender, elements, 0, [])
 	} else {
 		logger.trace('No memories - rejecting carousel');
