@@ -1,4 +1,6 @@
 //TODO: delete Cloudinary images saved during tests
+//TODO: find better loggin system
+//TODO: + easy way to get logs before any error
 
 const Q = require("q");
 const assert = require('assert');
@@ -32,9 +34,14 @@ const sendRequest = function(apiFunction, data, results, done) {
     }
     d.resolve(body)
   }).catch(function(e) {
-    logger.error(e);
-    if (done) done(e)
-    d.reject(e)
+    if (e == 412) {
+      logger.trace(e)
+      done()
+    } else {
+      logger.error(e);
+      if (done) done(e)
+      d.reject(e)
+    }
   })
   return d.promise
 }
@@ -161,7 +168,7 @@ describe('Bulk', function() {
 
   describe('API', function() {
 
-    const unlikelyQuery = "Lorem ipsum dolor sit amet, consectetur adipiscing elit?"
+    const unlikelyQuery = "What is Lorem ipsum dolor sit amet, consectetur adipiscing elit?"
     describe('Sending the unlikely query "' + unlikelyQuery + '" which won\'t bring back any results', function() {
       const results = {};
       before(function(done) {
@@ -344,7 +351,7 @@ describe('Bulk', function() {
 
   describe('Chatbot', function() {
 
-    const unlikelyQuery = "Lorem ipsum dolor sit amet, consectetur adipiscing elit?"
+    const unlikelyQuery = "What is Lorem ipsum dolor sit amet, consectetur adipiscing elit?"
     describe('Sending the unlikely query "' + unlikelyQuery + '" which won\'t bring back any results', function() {
       const expectedFragment = 'Sorry I couldn\'t find any memories related to that!'
 
@@ -736,64 +743,73 @@ describe('Bulk', function() {
         describe('Sending the message "' + message1 + '"', function() {
           const expectedIntent = "setTask.dateTime"
 
-          // const results = {};
-          // before(function(done) {
-          //   sendApiRequest(sender, message1, results, done)
-          // });
+          before(function() {
+            const d = Q.defer()
+            sendChatbotRequest(sender, message1)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
 
-          it('should be interpreted as a ' + expectedIntent
-            // , function(done) {
-            //   assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
-            //   done()
-            // }
-          )
-          it('should bring back quick reply options'
-            // , function(done) {
-            //   assert(resultList[resultList.length-1].messageData[0].data.message.quick_replies && resultList[resultList.length-1].messageData[0].data.message.quick_replies.length)
-            //   done()
-            // }
-          )
+          it('should be interpreted as a ' + expectedIntent, function(done) {
+            assert.equal(resultList[resultList.length-1].requestData.metadata.intentName, expectedIntent)
+            done()
+          })
+          it('should bring back quick reply options', function(done) {
+            assert(resultList[resultList.length-1].messageData[0].data.message.quick_replies && resultList[resultList.length-1].messageData[0].data.message.quick_replies.length)
+            done()
+          })
+          it('should bring back quick reply options that are different from the default ones')
         })
 
         const code1 = "CORRECTION_GET_DATETIME"
         describe('...followed by the quick reply "' + code1 + '"', function() {
           const expectedFragment = "Sure thing - when shall I remind you?"
 
-          // before(function() {
-          //   const d = Q.defer()
-          //   sendChatbotQuickReply(sender, code1)
-          //   .then(function(res) {
-          //     resultList.push(res)
-          //     d.resolve()
-          //   }).catch(function(e) {
-          //     d.reject(e)
-          //   })
-          //   return d.promise
-          // });
+          before(function() {
+            const d = Q.defer()
+            sendChatbotQuickReply(sender, code1)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
 
-          it('should ask when to remind you'
-            // , function(done) {
-            //   assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment) > -1)
-            //   done()
-            // }
-          )
+          it('should ask when to remind you', function(done) {
+            assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment) > -1)
+            done()
+          })
         })
 
         const message2 = "tomorrow at 5pm"
         describe('Sending the message "' + message2 + '"', function() {
-          const expectedIntent = "setTask.provieDateTime"
+          const expectedIntent = "provideDateTime"
           const expectedDateTimeNum = 1505664000000
 
-          // const results = {};
-          // before(function(done) {
-          //   sendApiRequest(sender, message2, results, done)
-          // });
+          before(function() {
+            const d = Q.defer()
+            sendChatbotRequest(sender, message2)
+            .then(function(res) {
+              resultList.push(res)
+              d.resolve()
+            }).catch(function(e) {
+              d.reject(e)
+            })
+            return d.promise
+          });
 
           it('should be interpreted as a ' + expectedIntent
-            // , function(done) {
-            //   assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
-            //   done()
-            // }
+            , function(done) {
+              assert.equal(resultList[resultList.length-1].requestData.metadata.intentName, expectedIntent)
+              done()
+            }
           )
           it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
             // , function(done) {

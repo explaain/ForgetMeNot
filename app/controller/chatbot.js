@@ -1,9 +1,13 @@
 //@TODO: figure out first message after Get started
 //@TODO: Refactor onboarding
-//@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
 //@TODO: provideURL and provideDateTime
-//@TODO: give up message
+//@TODO: setTask (generic)
+// ---
+//@TODO: general error handling!
+//@TODO: always accept storeMemory after attachment (?)
 //@TODO: click on carousel element to get full memory
+//@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
+//@TODO: Don't do default quick replies when bot asks for info
 
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
@@ -176,6 +180,7 @@ exports.handleMessage = function(body) {
 							logger.trace()
 							var result = {}
 							firstPromise = intentConfidence(sender, text)
+							setContext(sender, 'apiaiContexts', null) // Maybe don't always want to delete this straight away?
 						}
 					}
 					setContext(sender, 'expectingAttachment', null);
@@ -186,10 +191,10 @@ exports.handleMessage = function(body) {
 
 			firstPromise
 			.then(function(res) {
+				const responseMessage = res ? getResponseMessage(res) : null
 				if (res && res.memories) { //Not sure if this is the right condition?
 					setContext(sender, 'lastAction', res)
 				}
-				const responseMessage = res ? getResponseMessage(res) : null
 				d.resolve(responseMessage)
 			}).catch(function(e) {
 				logger.error(e)
@@ -305,6 +310,7 @@ const handleQuickReplies = function(requestData, quickReply) {
 		case "CORRECTION_GET_DATETIME":
 			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
 			// setContext(sender, 'apiaiContext', 'provideDateTime')
+			setContext(sender, 'apiaiContexts', [{name: 'requiring-date-time', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
@@ -593,10 +599,19 @@ function fetchUserDataFromFacebook(recipientId) {
 
 function intentConfidence(sender, message, extraData) {
 	logger.trace(intentConfidence);
+	logger.info(extraData)
 	const d = Q.defer()
 	const data = extraData || {};
 	data.sender = sender
 	data.text = message
+	logger.info(getContext(sender, 'apiaiContexts'))
+	if (apiaiContexts = getContext(sender, 'apiaiContexts')) {
+		data.contexts = apiaiContexts
+		if (apiaiContexts[0].name == 'requiring-date-time') { //Need to actually search this through all contexts
+			data.lastAction = getContext(sender, 'lastAction')
+		}
+	}
+	logger.info(data)
 	if (getContext(sender, 'holdingAttachment')) {
 		data.attachments = [getContext(sender, 'holdingAttachment')]
 		data.hasAttachments = true
@@ -604,10 +619,12 @@ function intentConfidence(sender, message, extraData) {
 	}
   api.acceptRequest(data)
   .then(function(res) {
+		logger.info(res)
 		if (res.requestData.intent == "Default Fallback Intent")
 			res.requestData.intent = 'query'
 		d.resolve(res)
   }).catch(function(e) {
+		logger.info(res.statusCode)
     logger.error(e);
 		const err = (e==404) ? 500 : e
 		d.reject(err)
@@ -616,11 +633,16 @@ function intentConfidence(sender, message, extraData) {
 }
 
 const getResponseMessage = function(data) {
+	logger.info(data)
 	logger.trace();
 	const sender = data.requestData.sender
 	var m = data.memories ? data.memories[0] : null
-	const intent = data.requestData.intent
-	if (!data.statusCode) data.statusCode = 200
+	var intent = data.requestData.intent
+	if (intent == 'provideDateTime') {
+		intent = getContext(sender, 'lastAction').requestData.intent
+		logger.info(intent)
+	}
+	logger.info(data.statusCode)
 	switch (data.statusCode) {
 		case 200:
 			logger.trace()
@@ -675,6 +697,7 @@ const getResponseMessage = function(data) {
 			break;
 
 		case 412:
+			logger.info()
 			switch (intent) {
 				case 'setTask.URL':
 					setContext(sender, 'lastAction', data);
@@ -713,7 +736,7 @@ const getResponseMessage = function(data) {
 	}
 
 
-	logger.log(data)
+	logger.info(data.messageData[0].data)
 
 	return data
 	// .then(function(data) {

@@ -1,7 +1,9 @@
 //TODO: intent 'nextResult'
-//TODO: give up
 //TODO: reminders that are too soon
 //TODO: reminders when clocks differ between devices
+//TODO: timezones
+//TODO: reminders push back 9pm to 9am instead of 9pm the next day
+
 
 const request = require('request');
 const Q = require("q");
@@ -14,10 +16,6 @@ const properties = require('../config/properties.js');
 const tracer = require('tracer')
 const logger = tracer.colorConsole({level: 'info'});
 // tracer.setLevel('warn');
-
-//API.ai setup
-const apiai = require('apiai');
-const apiaiApp = apiai("bdeba24b4bcf40feb24a1b8c1f86f3f3");
 
 // Algolia setup
 const AlgoliaSearch = require('algoliasearch');
@@ -97,14 +95,17 @@ exports.deleteMemories = function(sender, objectID) {
 
 exports.acceptRequest = function(requestData) {
   logger.trace('acceptRequest');
+  logger.info(requestData)
 	const d = Q.defer()
-  processNLP(requestData.text)
+  processNLP(requestData.sender, requestData.text, requestData.contexts)
 	.then(function(nlpData) {
+    logger.info(nlpData)
     requestData = combineObjects(requestData, nlpData)
 		return routeByIntent(requestData)
 	}).then(function(result) {
+    logger.info(result)
     logger.trace()
-    result.statusCode = 200 //temp
+    if (!result.statusCode) result.statusCode = 200 //temp
 		d.resolve(result)
 	}).catch(function(e) {
 		logger.error(e);
@@ -119,14 +120,10 @@ const routeByIntent = function(requestData) {
   var memory = {}
   requestData.generalIntent = getGeneralIntent(requestData.intent)
   if (requestData.generalIntent == 'write') {
-    memory = extractAllContext(requestData.parameters);
-    memory.intent = requestData.intent;
-    memory.sender = requestData.sender;
-    memory.sentence = rewriteSentence(requestData.resolvedQuery);
-    memory.attachments = requestData.attachments;
-    if (requestData.objectID) memory.objectID = requestData.objectID;
+    memory = getWrittenMemory(requestData)
     logger.log(memory)
   }
+  if (requestData.lastAction) var lastActionMemory = getWrittenMemory(requestData.lastAction.requestData);
   // if (requestData.intent == 'provideURL') requestData.intent = 'setTask.URL'
   // if (requestData.intent == 'provideDateTime') requestData.intent = 'setTask.dateTime'
   const data = {requestData: requestData, memories: [memory]}
@@ -187,8 +184,9 @@ const routeByIntent = function(requestData) {
 						d.reject(e)
 					})
 				} else {
-					logger.error(412);
-					d.reject(412)
+					logger.trace(412, 'No URL specified');
+          data.statusCode = 412
+					d.resolve(data)
 				}
 			} catch(e) {
 				logger.error(e);
@@ -196,15 +194,28 @@ const routeByIntent = function(requestData) {
 			}
 			break;
 
+		case "provideDateTime":
 		case "setTask.dateTime":
 			try {
+        logger.info(requestData.lastAction)
+        const contextMemory = lastActionMemory || memory
+        const dateTimeMemory = getWrittenMemory(requestData)
+        logger.info(contextMemory)
+        // if (requestData.lastAction) {
+        //   memory = requestData.lastAction.memories[0]
+        // }
+        var dateTimeOriginal = dateTimeMemory.entities['trigger-time'] || dateTimeMemory.entities['trigger-date'] || dateTimeMemory.entities['trigger-date-time'];
+        if (!dateTimeOriginal && requestData.intent == 'provideDateTime') {
+          dateTimeOriginal = dateTimeMemory.entities['time'] || dateTimeMemory.entities['date'] || dateTimeMemory.entities['date-time'];
+        }
 				memory.reminderRecipient = requestData.sender;
-				var dateTimeOriginal = memory.entities['trigger-time'] || memory.entities['trigger-date'] || memory.entities['trigger-date-time'];
+        logger.info(dateTimeOriginal)
 				if (dateTimeOriginal) {
-					memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-          memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, memory)
+					memory.actionSentence = getActionSentence(contextMemory.sentence, contextMemory.context)
+          memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, dateTimeMemory)
     			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
-					storeMemory(memory)
+          logger.info(memory)
+					storeMemory(contextMemory)
 					.then(function() {
 						scheduleReminder(memory);
 						d.resolve(data)
@@ -213,35 +224,37 @@ const routeByIntent = function(requestData) {
 						d.reject(e)
 					})
 				} else {
-					logger.error(412);
-					d.reject(412)
+					logger.trace(412, 'No date/time specified');
+          data.statusCode = 412
+          logger.info(data.statusCode)
+					d.resolve(data)
 				}
-			} catch(e) {
-				logger.error(e);
-				d.reject(412)
-			}
-			break;
-
-		case "provideDateTime":
-			var dateTimeOriginal = memory.entities.time || memory.entities.date || memory.entities['date-time'];
-			memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, memory)
-			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
-			try {
-				// memory.intent = getContext(sender, 'lastAction').intent;
-				// memory.context = getContext(sender, 'lastAction').context;
-				// memory.entities = getContext(sender, 'lastAction').entities;
-				// memory.sentence = getContext(sender, 'lastAction').sentence;
-				memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-				schedule.scheduleJob(memory.triggerDateTime, function(){
-					sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
-					logger.log('Reminder!', memory.actionSentence);
-				});
-				d.resolve(data)
 			} catch(e) {
 				logger.error(e);
 				d.reject(e)
 			}
 			break;
+
+		// case "provideDateTime":
+		// 	var dateTimeOriginal = memory.entities.time || memory.entities.date || memory.entities['date-time'];
+		// 	memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, memory)
+		// 	memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
+		// 	try {
+		// 		// memory.intent = getContext(sender, 'lastAction').intent;
+		// 		// memory.context = getContext(sender, 'lastAction').context;
+		// 		// memory.entities = getContext(sender, 'lastAction').entities;
+		// 		// memory.sentence = getContext(sender, 'lastAction').sentence;
+		// 		memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+		// 		schedule.scheduleJob(memory.triggerDateTime, function(){
+		// 			sendTextMessage(sender, '🔔 Reminder! ' + memory.actionSentence)
+		// 			logger.log('Reminder!', memory.actionSentence);
+		// 		});
+		// 		d.resolve(data)
+		// 	} catch(e) {
+		// 		logger.error(e);
+		// 		d.reject(e)
+		// 	}
+		// 	break;
 
 		case "provideURL":
 			try {
@@ -286,8 +299,9 @@ const routeByIntent = function(requestData) {
 }
 
 
-const processNLP = function(text) {
-	logger.trace(processNLP)
+const processNLP = function(sender, text, contexts) {
+  logger.info(contexts)
+	logger.trace()
 	const d = Q.defer()
   logger.log(text)
 	try {
@@ -296,7 +310,14 @@ const processNLP = function(text) {
 			'Content-Type': 'application/json; charset=utf-8',
 			'Authorization': 'Bearer bdeba24b4bcf40feb24a1b8c1f86f3f3'
 		};
-		const dataString = "{\'query\':\'" + messageToApiai + "\', \'timezone\':\'GMT+1\', \'lang\':\'en\', \'sessionId\':\'1234567890\' }";
+		const dataString = JSON.stringify({
+      query: messageToApiai,
+      timezone: 'GMT+1',
+      lang: 'en',
+      sessionId: sender,
+      contexts: contexts
+    })
+    logger.info(dataString)
 		const options = {
 			url: 'https://api.api.ai/v1/query?v=20150910',
 			method: 'POST',
@@ -304,8 +325,10 @@ const processNLP = function(text) {
 			body: dataString
 		};
 		function callback(error, response, body) {
+      logger.info(error)
 			if (!error && response.statusCode == 200) {
         const result = JSON.parse(body).result
+        logger.info(result)
         result.intent = result.metadata.intentName
 				d.resolve(result)
 			} else {
@@ -313,7 +336,9 @@ const processNLP = function(text) {
 				d.reject(error)
 			}
 		}
+    logger.info()
 		request(options, callback);
+    logger.info()
 	} catch(e) {
 		logger.error(e);
 		d.reject(e)
@@ -392,7 +417,7 @@ const storeMemory = function(memory) {
 
 
 const saveMemory = function(sender, m) {
-	logger.trace(saveMemory)
+	logger.trace()
 	const d = Q.defer()
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
 	fetchUserData(sender)
@@ -426,7 +451,8 @@ const saveMemory = function(sender, m) {
 }
 
 const getDbObject = function(index, objectID, returnArray) {
-	logger.trace(getDbObject)
+  logger.info(index, objectID)
+	logger.trace()
 	const d = Q.defer();
 	index.getObject(objectID, returnArray, function(err, content) {
 		if (err) {
@@ -734,6 +760,16 @@ function extractAllContext(e) {
 		}
 	});
 	return finalEntities;
+}
+
+const getWrittenMemory = function(requestData) {
+  var memory = extractAllContext(requestData.parameters);
+  memory.intent = requestData.intent;
+  memory.sender = requestData.sender;
+  memory.sentence = rewriteSentence(requestData.resolvedQuery);
+  memory.attachments = requestData.attachments;
+  if (requestData.objectID) memory.objectID = requestData.objectID;
+  return memory
 }
 
 
