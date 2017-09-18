@@ -95,15 +95,12 @@ exports.deleteMemories = function(sender, objectID) {
 
 exports.acceptRequest = function(requestData) {
   logger.trace('acceptRequest');
-  logger.info(requestData)
 	const d = Q.defer()
   processNLP(requestData.sender, requestData.text, requestData.contexts)
 	.then(function(nlpData) {
-    logger.info(nlpData)
     requestData = combineObjects(requestData, nlpData)
 		return routeByIntent(requestData)
 	}).then(function(result) {
-    logger.info(result)
     logger.trace()
     if (!result.statusCode) result.statusCode = 200 //temp
 		d.resolve(result)
@@ -197,10 +194,8 @@ const routeByIntent = function(requestData) {
 		case "provideDateTime":
 		case "setTask.dateTime":
 			try {
-        logger.info(requestData.lastAction)
         const contextMemory = lastActionMemory || memory
         const dateTimeMemory = getWrittenMemory(requestData)
-        logger.info(contextMemory)
         // if (requestData.lastAction) {
         //   memory = requestData.lastAction.memories[0]
         // }
@@ -209,12 +204,10 @@ const routeByIntent = function(requestData) {
           dateTimeOriginal = dateTimeMemory.entities['time'] || dateTimeMemory.entities['date'] || dateTimeMemory.entities['date-time'];
         }
 				memory.reminderRecipient = requestData.sender;
-        logger.info(dateTimeOriginal)
 				if (dateTimeOriginal) {
 					memory.actionSentence = getActionSentence(contextMemory.sentence, contextMemory.context)
           memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, dateTimeMemory)
     			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
-          logger.info(memory)
 					storeMemory(contextMemory)
 					.then(function() {
 						scheduleReminder(memory);
@@ -226,7 +219,6 @@ const routeByIntent = function(requestData) {
 				} else {
 					logger.trace(412, 'No date/time specified');
           data.statusCode = 412
-          logger.info(data.statusCode)
 					d.resolve(data)
 				}
 			} catch(e) {
@@ -300,7 +292,6 @@ const routeByIntent = function(requestData) {
 
 
 const processNLP = function(sender, text, contexts) {
-  logger.info(contexts)
 	logger.trace()
 	const d = Q.defer()
   logger.log(text)
@@ -317,7 +308,6 @@ const processNLP = function(sender, text, contexts) {
       sessionId: sender,
       contexts: contexts
     })
-    logger.info(dataString)
 		const options = {
 			url: 'https://api.api.ai/v1/query?v=20150910',
 			method: 'POST',
@@ -325,10 +315,8 @@ const processNLP = function(sender, text, contexts) {
 			body: dataString
 		};
 		function callback(error, response, body) {
-      logger.info(error)
 			if (!error && response.statusCode == 200) {
         const result = JSON.parse(body).result
-        logger.info(result)
         result.intent = result.metadata.intentName
 				d.resolve(result)
 			} else {
@@ -336,9 +324,7 @@ const processNLP = function(sender, text, contexts) {
 				d.reject(error)
 			}
 		}
-    logger.info()
 		request(options, callback);
-    logger.info()
 	} catch(e) {
 		logger.error(e);
 		d.reject(e)
@@ -451,7 +437,6 @@ const saveMemory = function(sender, m) {
 }
 
 const getDbObject = function(index, objectID, returnArray) {
-  logger.info(index, objectID)
 	logger.trace()
 	const d = Q.defer();
 	index.getObject(objectID, returnArray, function(err, content) {

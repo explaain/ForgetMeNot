@@ -863,18 +863,20 @@ describe('Bulk', function() {
       describe('Deleting all memories just created', function() {
         logger.trace(temporaryMemories)
         temporaryMemories.forEach(function(objectID, i) {
-          describe('Deleting memory #' + i, function() {
-            const results = {};
-            before(function(done) {
-              sendApiDeleteRequest(sender, objectID, results, done)
-            });
+          if (objectID) {
+            describe('Deleting memory #' + i, function() {
+              const results = {};
+              before(function(done) {
+                sendApiDeleteRequest(sender, objectID, results, done)
+              });
 
-            it('should be successfully deleted', function(done) {
-              logger.trace(results)
-              assert(results)
-              done()
+              it('should be successfully deleted', function(done) {
+                logger.trace(results)
+                assert(results)
+                done()
+              })
             })
-          })
+          }
         })
       })
     })

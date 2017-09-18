@@ -3,6 +3,7 @@
 //@TODO: provideURL and provideDateTime
 //@TODO: setTask (generic)
 // ---
+//@TODO: Make sure messageData.message.quick_replies is never existing yet empty!
 //@TODO: general error handling!
 //@TODO: always accept storeMemory after attachment (?)
 //@TODO: click on carousel element to get full memory
@@ -469,6 +470,7 @@ function getCarouselMessage(recipientId, elements, delay, quickReplies) {
 		}
   };
 	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
+	if (!messageData.message.quick_replies.length) delete messageData.message.quick_replies
   return messageData
 }
 // function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
@@ -599,19 +601,16 @@ function fetchUserDataFromFacebook(recipientId) {
 
 function intentConfidence(sender, message, extraData) {
 	logger.trace(intentConfidence);
-	logger.info(extraData)
 	const d = Q.defer()
 	const data = extraData || {};
 	data.sender = sender
 	data.text = message
-	logger.info(getContext(sender, 'apiaiContexts'))
 	if (apiaiContexts = getContext(sender, 'apiaiContexts')) {
 		data.contexts = apiaiContexts
 		if (apiaiContexts[0].name == 'requiring-date-time') { //Need to actually search this through all contexts
 			data.lastAction = getContext(sender, 'lastAction')
 		}
 	}
-	logger.info(data)
 	if (getContext(sender, 'holdingAttachment')) {
 		data.attachments = [getContext(sender, 'holdingAttachment')]
 		data.hasAttachments = true
@@ -619,12 +618,10 @@ function intentConfidence(sender, message, extraData) {
 	}
   api.acceptRequest(data)
   .then(function(res) {
-		logger.info(res)
 		if (res.requestData.intent == "Default Fallback Intent")
 			res.requestData.intent = 'query'
 		d.resolve(res)
   }).catch(function(e) {
-		logger.info(res.statusCode)
     logger.error(e);
 		const err = (e==404) ? 500 : e
 		d.reject(err)
@@ -633,16 +630,13 @@ function intentConfidence(sender, message, extraData) {
 }
 
 const getResponseMessage = function(data) {
-	logger.info(data)
 	logger.trace();
 	const sender = data.requestData.sender
 	var m = data.memories ? data.memories[0] : null
 	var intent = data.requestData.intent
 	if (intent == 'provideDateTime') {
 		intent = getContext(sender, 'lastAction').requestData.intent
-		logger.info(intent)
 	}
-	logger.info(data.statusCode)
 	switch (data.statusCode) {
 		case 200:
 			logger.trace()
@@ -657,7 +651,6 @@ const getResponseMessage = function(data) {
 						m = data.memories[(data.requestData.hitNum || 0)]
 						m.resultSentence = m.sentence;
 					} else {
-						// @TODO: Send message: Can't find anything
 						data.messageData = [{data: createTextMessage(sender, {text: 'Sorry I couldn\'t find any memories related to that!'})}]
 					}
 					break;
@@ -697,7 +690,6 @@ const getResponseMessage = function(data) {
 			break;
 
 		case 412:
-			logger.info()
 			switch (intent) {
 				case 'setTask.URL':
 					setContext(sender, 'lastAction', data);
@@ -734,9 +726,6 @@ const getResponseMessage = function(data) {
 	if (data.messageData && data.messageData[0] && data.messageData[0].data && data.messageData[0].data.message && !getContext(data.messageData[0].data.recipient.id, 'failing')) {
 		setContext(data.messageData[0].data.recipient.id, 'consecutiveFails', 0)
 	}
-
-
-	logger.info(data.messageData[0].data)
 
 	return data
 	// .then(function(data) {
