@@ -260,7 +260,6 @@ describe('Bulk', function() {
           done()
         })
         it('should bring back a result with a "triggerDateTime" parameter', function(done) {
-          logger.trace(results.body.memories[0])
           assert(results.body.memories[0].triggerDateTime)
           done()
         })
@@ -281,7 +280,11 @@ describe('Bulk', function() {
           assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
           done()
         })
-        it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+        it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
           // , function(done) {
           //   logger.trace(results.body.memories[0])
           //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
@@ -304,7 +307,11 @@ describe('Bulk', function() {
           assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
           done()
         })
-        it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+        it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
           // , function(done) {
           //   logger.trace(results.body.memories[0])
           //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
@@ -327,7 +334,92 @@ describe('Bulk', function() {
           assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
           done()
         })
-        it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+        it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
+          // , function(done) {
+          //   logger.trace(results.body.memories[0])
+          //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
+          //   done()
+          // }
+        )
+      })
+
+      const message5 = "Remind me tomorrow at 5pm to feed the cat, wash the dishes and clean the car"
+      describe('Sending the message "' + message5 + '"', function() {
+        const expectedIntent = "setTask.dateTime"
+        const expectedDateTimeNum = 1505664000000
+
+        const results = {};
+        before(function(done) {
+          sendApiRequest(sender, message5, results, done)
+        });
+
+        it('should be interpreted as a ' + expectedIntent, function(done) {
+          assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+          done()
+        })
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+        it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
+          // , function(done) {
+          //   logger.trace(results.body.memories[0])
+          //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
+          //   done()
+          // }
+        )
+      })
+
+      const message6 = "Tomorrow afternoon remind me to feed the cat, wash the dishes and clean the car"
+      describe('Sending the message "' + message6 + '"', function() {
+        const expectedIntent = "setTask.dateTime"
+        const expectedDateTimeNum = 1505664000000
+
+        const results = {};
+        before(function(done) {
+          sendApiRequest(sender, message6, results, done)
+        });
+
+        it('should be interpreted as a ' + expectedIntent, function(done) {
+          assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+          done()
+        })
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+        it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
+          // , function(done) {
+          //   logger.trace(results.body.memories[0])
+          //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
+          //   done()
+          // }
+        )
+      })
+
+      const message7 = "Next Thursday I need to feed the cat, wash the dishes and clean the car"
+      describe('Sending the message "' + message7 + '"', function() {
+        const expectedIntent = "setTask.dateTime"
+        const expectedDateTimeNum = 1505664000000
+
+        const results = {};
+        before(function(done) {
+          sendApiRequest(sender, message7, results, done)
+        });
+
+        it('should be interpreted as a ' + expectedIntent, function(done) {
+          assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
+          done()
+        })
+        it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+          assert(results.body.memories[0].triggerDateTime)
+          done()
+        })
+        it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
           // , function(done) {
           //   logger.trace(results.body.memories[0])
           //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)
@@ -860,7 +952,11 @@ describe('Bulk', function() {
             assert.equal(resultList[resultList.length-1].requestData.metadata.intentName, expectedIntent)
             done()
           })
-          it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
+          it('should bring back a result with a "triggerDateTime" parameter', function(done) {
+            assert(resultList[resultList.length-1].memories[0].triggerDateTime)
+            done()
+          })
+          it('should have triggerDateTime set as...' + expectedDateTimeNum + '"'
             // , function(done) {
             //   logger.trace(results.body.memories[0])
             //   assert.equal(new Date(results.body.memories[0].triggerDateTime).getTime(), expectedDateTimeNum)

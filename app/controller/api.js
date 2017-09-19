@@ -134,7 +134,6 @@ const routeByIntent = function(requestData) {
 		d.reject(e)
 	}
 
-	logger.log(memory)
 	switch(requestData.intent) {
 		case "nextResult":
 			tryAnotherMemory(sender);
@@ -211,7 +210,7 @@ const routeByIntent = function(requestData) {
         // if (requestData.lastAction) {
         //   memory = requestData.lastAction.memories[0]
         // }
-        var dateTimeOriginal = dateTimeMemory.entities['trigger-time'] || dateTimeMemory.entities['trigger-date'] || dateTimeMemory.entities['trigger-date-time'];
+        var dateTimeOriginal = dateTimeMemory.entities['trigger-time'] || dateTimeMemory.entities['trigger-date'] || dateTimeMemory.entities['trigger-date-time'] || dateTimeMemory.entities['action-time'] || dateTimeMemory.entities['action-date'] || dateTimeMemory.entities['action-date-time']
         if (!dateTimeOriginal && requestData.intent == 'provideDateTime') {
           dateTimeOriginal = dateTimeMemory.entities['time'] || dateTimeMemory.entities['date'] || dateTimeMemory.entities['date-time'];
         }
@@ -716,19 +715,39 @@ const getActionSentence = function(sentence, context) {
 function rewriteSentence(sentence) { // Currently very primitive!
 	logger.trace(rewriteSentence);
 	sentence = sentence.trim().replace(/’/g, '\'');
-  const remove = [
+  const remove1 = [
     /^Remember that /i,
     /^Remember /i,
 		/^Remind me to /i,
     /^Remind me /i,
+  ]
+  const remove2 = [
     /^Please /i,
 		/ please\.^/i,
     / please^/i,
-
   ];
-	remove.forEach(function(r) {
-		sentence = sentence.replace(r, '');
+	remove1.forEach(function(r) {
+    const pos = sentence.indexOf(r) > -1
+    if (pos > -1) {
+      if (pos > 4)
+        sentence = sentence.substring(pos+r.length, sentence.length)
+      else
+        sentence = sentence.replace(r, '');
+    }
 	});
+	remove2.forEach(function(r) {
+    sentence = sentence.replace(r, '');
+	});
+  var sentenceE = encodeURIComponent(sentence)
+  const replaceE = [
+    ["I%5C'm", 'you\'re'],
+    ["i%5C'm", 'you\'re'],
+  ];
+  replaceE.forEach(function(r) {
+    sentenceE = sentenceE.replace(r[0], r[1]);
+  });
+  sentence = decodeURIComponent(sentenceE)
+
   const replace = [
     [/\bI\'m\b/i, 'you\'re'],
     [/\bIm\b/i, 'you\'re'],
