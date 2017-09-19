@@ -217,7 +217,9 @@ const routeByIntent = function(requestData) {
         }
 				memory.reminderRecipient = requestData.sender;
 				if (dateTimeOriginal) {
-					memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+          // memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+          const actionText = rewriteSentence(Sherlock.parse(memory.sentence).eventTitle)
+          memory.actionSentence = getEmojis(actionText) + ' ' + actionText;
           memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, dateTimeMemory)
     			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
           data.memories = [memory]
@@ -702,10 +704,13 @@ const getActionSentence = function(sentence, context) {
 	// 	return b > -1
 	// }))
 	// const text = rewriteSentence(sentence.substring(start, end+1))
+	const text = rewriteSentence(sentence)
+  return getEmojis(sentence) + ' ' + sentence;
 
   // Trying out replacing all the above with Sherlock
-  const text = Sherlock.parse(sentence).eventTitle
-	return getEmojis(sentence) + ' ' + sentence;
+  // const text = rewriteSentence(Sherlock.parse(sentence).eventTitle)
+  // const actionSentence = getEmojis(text) + ' ' + text;
+	// return actionSentence
 }
 
 function rewriteSentence(sentence) { // Currently very primitive!
@@ -725,11 +730,11 @@ function rewriteSentence(sentence) { // Currently very primitive!
 		sentence = sentence.replace(r, '');
 	});
   const replace = [
-    [/\bme\b/i, 'you'],
-    [/\bmy\b/i, 'your'],
     [/\bI\'m\b/i, 'you\'re'],
     [/\bIm\b/i, 'you\'re'],
     [/\bI am\b/i, 'you are'],
+    [/\bme\b/i, 'you'],
+    [/\bmy\b/i, 'your'],
     [/\bI\b/i, 'you'],
   ];
   replace.forEach(function(r) {

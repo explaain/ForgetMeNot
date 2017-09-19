@@ -2,6 +2,8 @@
 //TODO: find better logging system
 //TODO: + easy way to get logs before any error
 //TODO: add setTask test
+//TODO: test that task actionSentences don't include "remind me to", numbers etc
+//TODO: test that task actionSentences extract the key info
 
 const Q = require("q");
 const assert = require('assert');
