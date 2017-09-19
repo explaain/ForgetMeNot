@@ -3,6 +3,7 @@
 //TODO: reminders when clocks differ between devices
 //TODO: timezones
 //TODO: reminders push back 9pm to 9am instead of 9pm the next day
+//TODO: dateTime extractor libraries
 
 
 const request = require('request');
@@ -167,13 +168,21 @@ const routeByIntent = function(requestData) {
 			}
 			break;
 
+		case "provideURL":
 		case "setTask.URL":
 			try {
+        memory = lastActionMemory || memory
+        memory.intent = 'setTask.URL'
+        const urlMemory = getWrittenMemory(requestData)
 				memory.reminderRecipient = requestData.sender;
-				memory.triggerUrl = memory.entities['trigger-url'] || memory.entities['trigger-website'];
-				if (memory.triggerUrl) {
-					memory.triggerUrl = memory.triggerUrl[0]
+				memory.triggerURL = urlMemory.entities['trigger-website'] || urlMemory.entities['trigger-url'];
+        if (!memory.triggerURL && requestData.intent == 'provideURL') {
+          memory.triggerURL = urlMemory.entities['website'] || urlMemory.entities['url']
+        }
+				if (memory.triggerURL) {
+					memory.triggerURL = memory.triggerURL[0]
 					memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+          data.memories = [memory]
 					storeMemory(memory)
 					.then(function() {
 						d.resolve(data)
@@ -195,7 +204,8 @@ const routeByIntent = function(requestData) {
 		case "provideDateTime":
 		case "setTask.dateTime":
 			try {
-        const contextMemory = lastActionMemory || memory
+        memory = lastActionMemory || memory
+        memory.intent = 'setTask.dateTime'
         const dateTimeMemory = getWrittenMemory(requestData)
         // if (requestData.lastAction) {
         //   memory = requestData.lastAction.memories[0]
@@ -206,10 +216,11 @@ const routeByIntent = function(requestData) {
         }
 				memory.reminderRecipient = requestData.sender;
 				if (dateTimeOriginal) {
-					memory.actionSentence = getActionSentence(contextMemory.sentence, contextMemory.context)
+					memory.actionSentence = getActionSentence(memory.sentence, memory.context)
           memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, dateTimeMemory)
     			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
-					storeMemory(contextMemory)
+          data.memories = [memory]
+					storeMemory(memory)
 					.then(function() {
 						scheduleReminder(memory);
 						d.resolve(data)
@@ -249,27 +260,27 @@ const routeByIntent = function(requestData) {
 		// 	}
 		// 	break;
 
-		case "provideURL":
-			try {
-				memory.triggerUrl = memory.entities['url'] || memory.entities['website'];
-				memory.triggerUrl = memory.triggerUrl[0]
-				// memory.intent = getContext(sender, 'lastAction').intent;
-				// memory.context = getContext(sender, 'lastAction').context;
-				// memory.entities = getContext(sender, 'lastAction').entities;
-				// memory.sentence = getContext(sender, 'lastAction').sentence;
-				memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-			} catch(e) {
-				logger.error(e);
-				d.reject(e)
-			}
-			storeMemory(memory)
-			.then(function() {
-				d.resolve(data)
-			}).catch(function(e) {
-				logger.error(e);
-				d.reject(e)
-			})
-			break;
+		// case "provideURL":
+		// 	try {
+		// 		memory.triggerURL = memory.entities['url'] || memory.entities['website'];
+		// 		memory.triggerURL = memory.triggerURL[0]
+		// 		// memory.intent = getContext(sender, 'lastAction').intent;
+		// 		// memory.context = getContext(sender, 'lastAction').context;
+		// 		// memory.entities = getContext(sender, 'lastAction').entities;
+		// 		// memory.sentence = getContext(sender, 'lastAction').sentence;
+		// 		memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+		// 	} catch(e) {
+		// 		logger.error(e);
+		// 		d.reject(e)
+		// 	}
+		// 	storeMemory(memory)
+		// 	.then(function() {
+		// 		d.resolve(data)
+		// 	}).catch(function(e) {
+		// 		logger.error(e);
+		// 		d.reject(e)
+		// 	})
+		// 	break;
 
 		default:
 			if (requestData.intent && requestData.intent != 'Default Fallback Intent') {
@@ -598,10 +609,10 @@ const getDateTimeNum = function(dateTimeOriginal, memory) {
 
 
 
-const backupAttachment = function(recipientId, attachmentType, attachmentUrl) {
+const backupAttachment = function(recipientId, attachmentType, attachmentURL) {
 	logger.trace(backupAttachment)
 	const d = Q.defer()
-	cloudinary.uploader.upload(attachmentUrl, function(result, error) {
+	cloudinary.uploader.upload(attachmentURL, function(result, error) {
 		if (error) {
       logger.error(error);
 			d.reject(error)
@@ -779,7 +790,8 @@ const combineObjects = function(a, b) {
 
 const getGeneralIntent = function(intent) {
   // What about no intent?
-  if (['storeMemory', 'setTask', 'setTask.dateTime', 'setTask.URL', 'deleteMemory'].indexOf(intent) > -1) {
+  // 'provideDateTime', 'provideURL' shouldn't really be automatically 'write'
+  if (['storeMemory', 'setTask', 'setTask.dateTime', 'setTask.URL', 'deleteMemory', 'provideDateTime', 'provideURL'].indexOf(intent) > -1) {
     return 'write'
   } else if (['query']) {
     return 'read'

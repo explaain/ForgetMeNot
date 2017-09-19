@@ -1,8 +1,6 @@
 //@TODO: figure out first message after Get started
 //@TODO: Refactor onboarding
-//@TODO: setTask (generic)
 // ---
-//@TODO: provideURL
 //@TODO: Make sure messageData.message.quick_replies is never existing yet empty!
 //@TODO: general error handling!
 //@TODO: always accept storeMemory after attachment (?)
@@ -332,14 +330,13 @@ const handleQuickReplies = function(requestData, quickReply) {
 
 		case "CORRECTION_GET_DATETIME":
 			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
-			// setContext(sender, 'apiaiContext', 'provideDateTime')
 			setContext(sender, 'apiaiContexts', [{name: 'requiring-date-time', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "CORRECTION_GET_URL":
 			var messageData = createTextMessage(sender, "Sure thing - what's the url?", 0, []);
-			// setContext(sender, 'apiaiContext', 'provideURL')
+			setContext(sender, 'apiaiContexts', [{name: 'requiring-url', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
@@ -630,7 +627,7 @@ function intentConfidence(sender, message, extraData) {
 	data.text = message
 	if (apiaiContexts = getContext(sender, 'apiaiContexts')) {
 		data.contexts = apiaiContexts
-		if (apiaiContexts[0].name == 'requiring-date-time') { //Need to actually search this through all contexts
+		if (['requiring-date-time', 'requiring-url'].indexOf(apiaiContexts[0].name) > -1 ) {
 			data.lastAction = getContext(sender, 'lastAction')
 		}
 	}
@@ -657,9 +654,8 @@ const getResponseMessage = function(data) {
 	const sender = data.requestData.sender
 	var m = data.memories ? data.memories[0] : null
 	var intent = data.requestData.intent
-	if (intent == 'provideDateTime') {
-		intent = getContext(sender, 'lastAction').requestData.intent
-	}
+	if (intent == 'provideDateTime') intent = 'setTask.dateTime'
+	if (intent == 'provideURL') intent = 'setTask.URL'
 	switch (data.statusCode) {
 		case 200:
 			logger.trace()
@@ -685,7 +681,7 @@ const getResponseMessage = function(data) {
 				case 'setTask.URL':
 					m.resultSentence = "I've now set that reminder for you! 🔔 \n\n"
 																	+ m.actionSentence + '\n'
-																	+ '🖥 ' + m.triggerUrl;
+																	+ '🖥 ' + m.triggerURL;
 					break;
 
 				case 'setTask.dateTime':
@@ -719,6 +715,7 @@ const getResponseMessage = function(data) {
 					var quickReplies = [
 						["🖥 URL", "CORRECTION_GET_URL"],
 						["📂 Just store", "CORRECTION_QUERY_TO_STORE"],
+						["⏱ Date/time", "CORRECTION_GET_DATETIME"],
 					];
 					m.resultSentence = "Just to check - did you want me to remind you when you go to a certain URL, or just store this memory for later?"
 					break;
@@ -728,6 +725,7 @@ const getResponseMessage = function(data) {
 					var quickReplies = [
 						["⏱ Date/time", "CORRECTION_GET_DATETIME"],
 						["📂 Just store", "CORRECTION_QUERY_TO_STORE"],
+						["🖥 URL", "CORRECTION_GET_URL"],
 					];
 					m.resultSentence = "Just to check - did you want me to remind you at a certain date or time, or just store this memory for later?"
 					break;

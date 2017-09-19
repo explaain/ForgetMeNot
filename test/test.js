@@ -341,7 +341,7 @@ describe('Bulk', function() {
       const message5 = "Remind me to buy cat food next time I'm on Tesco.com"
       describe('Sending the message "' + message5 + '"', function() {
         const expectedIntent = "setTask.URL"
-        const expectedUrl = 'Tesco.com'
+        const expectedURL = 'Tesco.com'
 
         const results = {};
         before(function(done) {
@@ -352,8 +352,8 @@ describe('Bulk', function() {
           assert.equal(results.body.requestData.metadata.intentName, expectedIntent)
           done()
         })
-        it('should bring back a result with the "triggerUrl" parameter "' + expectedUrl + '"', function(done) {
-          assert.equal(results.body.memories[0].triggerUrl, expectedUrl)
+        it('should bring back a result with the "triggerURL" parameter "' + expectedURL + '"', function(done) {
+          assert.equal(results.body.memories[0].triggerURL, expectedURL)
           done()
         })
       })
@@ -854,12 +854,10 @@ describe('Bulk', function() {
             return d.promise
           });
 
-          it('should be interpreted as a ' + expectedIntent
-            , function(done) {
-              assert.equal(resultList[resultList.length-1].requestData.metadata.intentName, expectedIntent)
-              done()
-            }
-          )
+          it('should be interpreted as a ' + expectedIntent, function(done) {
+            assert.equal(resultList[resultList.length-1].requestData.metadata.intentName, expectedIntent)
+            done()
+          })
           it('should bring back a result with the "triggerDateTime" parameter "' + expectedDateTimeNum + '"'
             // , function(done) {
             //   logger.trace(results.body.memories[0])
@@ -870,7 +868,93 @@ describe('Bulk', function() {
         })
       })
     })
-  });
+
+    describe('Send reminder without the details, then confirm URL and then reply with details', function() {
+      var resultList = []
+
+      const message1 = "Remind me to feed the cat"
+      describe('Sending the message "' + message1 + '"', function() {
+        const expectedIntents = [
+          "setTask",
+          "setTask.dateTime",
+          "setTask.URL",
+        ]
+
+        before(function() {
+          const d = Q.defer()
+          sendChatbotRequest(sender, message1)
+          .then(function(res) {
+            resultList.push(res)
+            d.resolve()
+          }).catch(function(e) {
+            d.reject(e)
+          })
+          return d.promise
+        });
+
+        it('should be interpreted as one of ' + expectedIntents.join(' or '), function(done) {
+          assert(expectedIntents.indexOf(resultList[resultList.length-1].requestData.metadata.intentName) > -1)
+          done()
+        })
+        it('should bring back quick reply options', function(done) {
+          assert(resultList[resultList.length-1].messageData[0].data.message.quick_replies && resultList[resultList.length-1].messageData[0].data.message.quick_replies.length)
+          done()
+        })
+        it('should bring back quick reply options that are different from the default ones')
+      })
+
+      const code1 = "CORRECTION_GET_URL"
+      describe('...followed by the quick reply "' + code1 + '"', function() {
+        const expectedFragment = "Sure thing - what's the url?"
+
+        before(function() {
+          const d = Q.defer()
+          sendChatbotQuickReply(sender, code1)
+          .then(function(res) {
+            resultList.push(res)
+            d.resolve()
+          }).catch(function(e) {
+            d.reject(e)
+          })
+          return d.promise
+        });
+
+        it('should ask what the URL is', function(done) {
+          assert(resultList[resultList.length-1].messageData[0].data.message.text.indexOf(expectedFragment) > -1)
+          done()
+        })
+      })
+
+      const message2 = "Facebook"
+      describe('Sending the message "' + message2 + '"', function() {
+        const expectedIntent = "provideURL"
+        const expectedURL = 'facebook.com'
+
+        before(function() {
+          const d = Q.defer()
+          sendChatbotRequest(sender, message2)
+          .then(function(res) {
+            resultList.push(res)
+            d.resolve()
+          }).catch(function(e) {
+            d.reject(e)
+          })
+          return d.promise
+        });
+
+        it('should be interpreted as a ' + expectedIntent
+          , function(done) {
+            assert.equal(resultList[resultList.length-1].requestData.metadata.intentName, expectedIntent)
+            done()
+          }
+        )
+        it('should bring back a result with the "triggerURL" parameter "' + expectedURL + '"', function(done) {
+          assert.equal(resultList[resultList.length-1].memories[0].triggerURL, expectedURL)
+          done()
+        })
+      })
+    })
+  })
 
   describe('Messenger', function() {
     describe('Say hello', function() {
