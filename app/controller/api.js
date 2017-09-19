@@ -11,6 +11,7 @@ const Q = require("q");
 const emoji = require('moji-translate');
 const schedule = require('node-schedule');
 const chrono = require('chrono-node')
+const Sherlock = require('sherlockjs');
 
 const properties = require('../config/properties.js');
 
@@ -594,16 +595,19 @@ const createUserAccount = function(userData) {
 
 
 const getDateTimeNum = function(dateTimeOriginal, memory) {
-	logger.trace(getDateTimeNum)
-	dateTime = dateTimeOriginal[0]
-	dateTime = chrono.parseDate(dateTime) || dateTime;
-	var dateTimeNum = dateTime.getTime();
-	if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'] && dateTimeOriginal.toString().length > 16)
-    dateTimeNum = dateTimeNum - 3600000
-	if (dateTimeNum < new Date().getTime() && dateTimeNum+43200000 > new Date().getTime())
-    dateTimeNum += 43200000;
-	else if (dateTimeNum < new Date().getTime() && dateTimeNum+86400000 > new Date().getTime())
-    dateTimeNum += 86400000;
+	// logger.trace(getDateTimeNum)
+	// dateTime = dateTimeOriginal[0]
+	// dateTime = chrono.parseDate(dateTime) || dateTime;
+	// var dateTimeNum = dateTime.getTime();
+	// if (!memory.entities['trigger-time'] && !memory.entities['trigger-date'] && dateTimeOriginal.toString().length > 16)
+  //   dateTimeNum = dateTimeNum - 3600000
+	// if (dateTimeNum < new Date().getTime() && dateTimeNum+43200000 > new Date().getTime())
+  //   dateTimeNum += 43200000;
+	// else if (dateTimeNum < new Date().getTime() && dateTimeNum+86400000 > new Date().getTime())
+  //   dateTimeNum += 86400000;
+
+  // Trying out replacing all the above with Sherlock
+  const dateTimeNum = Sherlock.parse(memory.sentence).startDate.getTime()
 	return dateTimeNum
 }
 
@@ -680,24 +684,27 @@ const fetchListItemCards = function(cards) {
 
 
 const getActionSentence = function(sentence, context) {
-	logger.trace(getActionSentence)
-	const actionContext = [];
-	context.forEach(function(c) {
-		if (c.type.indexOf('action-') > -1) {
-			actionContext.push(c.value);
-		}
-	})
-	const start = Math.min.apply(null, actionContext.map(function(a) {
-		return sentence.toLowerCase().indexOf(a.toLowerCase())
-	}).filter(function(b) {
-		return b > -1
-	}))
-	const end = Math.max.apply(null, actionContext.map(function(a) {
-		return sentence.toLowerCase().indexOf(a.toLowerCase()) + a.length
-	}).filter(function(b) {
-		return b > -1
-	}))
-	const text = rewriteSentence(sentence.substring(start, end+1))
+	// logger.trace(getActionSentence)
+	// const actionContext = [];
+	// context.forEach(function(c) {
+	// 	if (c.type.indexOf('action-') > -1) {
+	// 		actionContext.push(c.value);
+	// 	}
+	// })
+	// const start = Math.min.apply(null, actionContext.map(function(a) {
+	// 	return sentence.toLowerCase().indexOf(a.toLowerCase())
+	// }).filter(function(b) {
+	// 	return b > -1
+	// }))
+	// const end = Math.max.apply(null, actionContext.map(function(a) {
+	// 	return sentence.toLowerCase().indexOf(a.toLowerCase()) + a.length
+	// }).filter(function(b) {
+	// 	return b > -1
+	// }))
+	// const text = rewriteSentence(sentence.substring(start, end+1))
+
+  // Trying out replacing all the above with Sherlock
+  const text = Sherlock.parse(sentence).eventTitle
 	return getEmojis(sentence) + ' ' + sentence;
 }
 
