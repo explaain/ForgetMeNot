@@ -193,7 +193,6 @@ exports.handleMessage = function(body) {
 				if (res && res.memories) { //Not sure if this is the right condition?
 					setContext(sender, 'lastAction', res)
 				}
-				// if (res.memories) logger.info(res.memories[0].actionSentence)
 				d.resolve(responseMessage)
 			}).catch(function(e) {
 				logger.error(e)

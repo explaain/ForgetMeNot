@@ -4,6 +4,7 @@
 //TODO: timezones
 //TODO: reminders push back 9pm to 9am instead of 9pm the next day
 //TODO: dateTime extractor libraries
+//TODO: remove scheduled reminders when the memory is deleted
 
 
 const request = require('request');
@@ -217,7 +218,7 @@ const routeByIntent = function(requestData) {
 				memory.reminderRecipient = requestData.sender;
 				if (dateTimeOriginal) {
           // memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-          const actionText = rewriteSentence(Sherlock.parse(memory.sentence).eventTitle)
+          const actionText = rewriteSentence(memory.sentence, true)
           memory.actionSentence = getEmojis(actionText) + ' ' + actionText;
           memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, dateTimeMemory)
     			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
@@ -684,7 +685,7 @@ const fetchListItemCards = function(cards) {
 
 
 
-const getActionSentence = function(sentence, context) {
+const getActionSentence = function(sentence, context, reminder) {
 	// logger.trace(getActionSentence)
 	// const actionContext = [];
 	// context.forEach(function(c) {
@@ -703,7 +704,7 @@ const getActionSentence = function(sentence, context) {
 	// 	return b > -1
 	// }))
 	// const text = rewriteSentence(sentence.substring(start, end+1))
-	const text = rewriteSentence(sentence)
+	const text = rewriteSentence(sentence, reminder)
   return getEmojis(sentence) + ' ' + sentence;
 
   // Trying out replacing all the above with Sherlock
@@ -712,32 +713,53 @@ const getActionSentence = function(sentence, context) {
 	// return actionSentence
 }
 
-function rewriteSentence(sentence) { // Currently very primitive!
+function rewriteSentence(originalSentence, reminder) { // Currently very primitive!
 	logger.trace(rewriteSentence);
+  var sentence = JSON.parse(JSON.stringify(originalSentence))
 	sentence = sentence.trim().replace(/’/g, '\'');
-  const remove1 = [
-    /^Remember that /i,
-    /^Remember /i,
-		/^Remind me to /i,
-    /^Remind me /i,
-  ]
-  const remove2 = [
-    /^Please /i,
-		/ please\.^/i,
-    / please^/i,
-  ];
-	remove1.forEach(function(r) {
-    const pos = sentence.indexOf(r) > -1
-    if (pos > -1) {
-      if (pos > 4)
-        sentence = sentence.substring(pos+r.length, sentence.length)
-      else
-        sentence = sentence.replace(r, '');
+  // const remove1 = [
+  //   /^Remember that /i,
+  //   /^Remember /i,
+	// 	/^Remind me to /i,
+  //   /^Remind me /i,
+	// 	/^I need to /i,
+  //   /^I should /i,
+  // ]
+  if (reminder) {
+    const remove1 = [
+      ["remember that ", /remember that /i],
+      ["remember to ", /remember to /i],
+      ["remember ", /remember /i],
+      ["remind you to ", /remind you to /i],
+      ["remind you ", /remind you /i],
+      ["you need to ", /you need to /i],
+      ["you should ", /you should /i],
+    ]
+    const remove2 = [
+      /^Please /i,
+      / please\.^/i,
+      / please^/i,
+    ];
+    remove1.forEach(function(r) {
+      const pos = sentence.toLowerCase().indexOf(r[0])
+      if (pos > -1) {
+        if (pos > 4) {
+          sentence = sentence.substring(pos+r[0].length, sentence.length)
+        }
+        else {
+          sentence = sentence.replace(r[1], ' ')
+          sentence = reminder ? (Sherlock.parse(sentence).eventTitle || sentence) : sentence
+        }
+      }
+    });
+    const origPos = originalSentence.indexOf(sentence)
+    if (origPos > 15) {
+      sentence = originalSentence.substring(origPos, originalSentence.length)
     }
-	});
-	remove2.forEach(function(r) {
-    sentence = sentence.replace(r, '');
-	});
+    remove2.forEach(function(r) {
+      sentence = sentence.replace(r, '');
+    });
+  }
   var sentenceE = encodeURIComponent(sentence)
   const replaceE = [
     ["I%5C'm", 'you\'re'],

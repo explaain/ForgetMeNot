@@ -33,7 +33,7 @@ const sendRequest = function(apiFunction, data, results, done) {
       done()
     }
     if (body.requestData.generalIntent == 'write' && body.requestData.intent != 'deleteMemory') {
-      temporaryMemories.push(body.memories[0].objectID)
+      temporaryMemories.push(body.memories[0])
     }
     d.resolve(body)
   }).catch(function(e) {
@@ -565,6 +565,74 @@ describe('Bulk', function() {
     })
 
 
+    describe('0001 Action Sentence testing', function() {
+      const localSender = '1300120880110773'
+      const tests = [
+        ['5', 'Remind me to feed the cat in 5 mins', 'Feed the cat'],
+        ['5', 'Remind me at 5pm to feed the cat', 'Feed the cat'],
+        ['5', 'Remind me at 5pm tomorrow to feed the cat', 'Feed the cat'],
+        ['5', 'Remind me tomorrow at 5pm to feed the cat', 'Feed the cat'],
+        ['4', 'Remind me tomorrow at 5pm to feed the cat, wash the dishes and clean the car', 'Feed the cat, wash the dishes and clean the car'],
+        ['4', 'Tomorrow afternoon remind me to feed the cat, wash the dishes and clean the car', 'Feed the cat, wash the dishes and clean the car'],
+        ['4', 'Next Thursday I need to feed the cat, wash the dishes and clean the car', 'Feed the cat, wash the dishes and clean the car'],
+        ['5', 'I need to clean the car tomorrow', 'Clean the car'],
+        ['5', 'remind me on Friday at 2 pm to send paperwork to new rainbow', 'Send paperwork to new rainbow'],
+        ['5', 'On Friday at 2pm remind me to send paperwork to new rainbow ', 'Send paperwork to new rainbow'],
+        ['5', 'I need to send paperwork to new rainbow at 2pm Friday ', 'Send paperwork to new rainbow'],
+        ['5', 'remind me at 9 am on friday to collect reading books from library', 'Collect reading books from library'],
+        ['5', 'At 9am on Friday I need to collect the reading books from library', 'Collect the reading books from library'],
+        ['5', 'Remind me Friday at 9am I need to collect reading books from library', 'Collect reading books from library'],
+        ['2', 'Tomorrow at 10 am to take the meat loaf out of the freezer', 'Take the meat loaf out of the freezer'],
+        ['4', 'Remind me at 10am tomorrow to take the meat loaf out the freezer', 'Take the meat loaf out the freezer'],
+        ['5', 'remind me at 9 am tomorrow to phone danny and vet', 'Phone Danny and Vet'],
+        ['5', 'At 9am tomorrow I need to phone Danny and vet', 'Phone Danny and Vet'],
+        ['5', 'Remind me tomorrow at 9am I should phone Danny and vet', 'Phone Danny and Vet'],
+        ['5', 'remind me tonight at 8 pm to email Nerissa', 'Email Nerissa'],
+        ['5', 'Tonight at 8pm I need to email Nerissa', 'Email Nerissa'],
+        ['5', 'I need to email Nerissa at 8pm tonight', 'Email Nerissa'],
+        ['5', 'Remind me tomorrow at 2 pm to cancel flu jab', 'Cancel flu jab'],
+        ['5', 'Tomorrow at 2pm remind me to cancel flu jab', 'Cancel flu jab'],
+        ['5', 'Remind me at 2pm tomorrow I need to cancel flu jab', 'Cancel flu jab'],
+        ['5', 'Remind me on Monday at 2 pm to set up emms standing order and cancel Halifax one', 'Set up emms standing order and cancel Halifax one'],
+        ['5', 'At 2pm on Monday I need to set up emms standing order and cancel Halifax one', 'Set up emms standing order and cancel Halifax one'],
+        ['4', 'Monday at 2pm I need to set up emms standing order and cancel Halifax one', 'Set up emms standing order and cancel Halifax one'],
+        ['5', 'Remind me on Wednesday morning at 10 am to call vet', 'Call vet'],
+        ['4', 'I need to call the vet at 10am on Wednesday ', 'Call the vet'],
+        ['5', 'Remind me at 10am on Wednesday to call vet', 'Call vet'],
+      ]
+      var score = 0,
+          total = 0
+      tests.forEach(function(test) {
+        describe('"' + test[1] + '"', function() {
+          const results = {}
+          before(function(done) {
+            sendChatbotRequest(localSender, test[1], results, done)
+          });
+          if (test[0] > 2) {
+            it('"' + test[2] + '"', function(done) {
+              const aS = results.body.memories[0].actionSentence
+              const passed = (aS.substring(2, aS.length).toLowerCase() == test[2].toLowerCase()) || (aS.substring(3, aS.length).toLowerCase() == test[2].toLowerCase())
+              total += parseInt(test[0])
+              if (passed) {
+                score += parseInt(test[0])
+              } else {
+                logger.info(aS)
+              }
+              assert(passed)
+              done()
+            })
+          } else {
+            total += parseInt(test[0])
+            it('"' + test[2] + '"')
+          }
+        })
+      })
+      after(function() {
+        logger.info('Final score: ' + score + ' / ' + total)
+      })
+    })
+
+
 
 
     describe('Message sequences', function() {
@@ -1090,15 +1158,15 @@ describe('Bulk', function() {
   })
 
   after(function() {
-    describe('Clearup', function() {
+    describe('0001 Clearup', function() {
       describe('Deleting all memories just created', function() {
         logger.trace(temporaryMemories)
-        temporaryMemories.forEach(function(objectID, i) {
-          if (objectID) {
+        temporaryMemories.forEach(function(memory, i) {
+          if (memory.objectID) {
             describe('Deleting memory #' + i, function() {
               const results = {};
               before(function(done) {
-                sendApiDeleteRequest(sender, objectID, results, done)
+                sendApiDeleteRequest(memory.userID, memory.objectID, results, done)
               });
 
               it('should be successfully deleted', function(done) {
