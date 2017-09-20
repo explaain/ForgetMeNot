@@ -4,6 +4,7 @@
 //TODO: add setTask test
 //TODO: test that task actionSentences don't include "remind me to", numbers etc
 //TODO: test that task actionSentences extract the key info
+//TODO: add a reschedule test (for some event set years into the future)
 
 const Q = require("q");
 const assert = require('assert');

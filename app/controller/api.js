@@ -311,7 +311,7 @@ const processNLP = function(sender, text, contexts) {
 	const d = Q.defer()
   logger.log(text)
 	try {
-		const messageToApiai = text.substring(0, 256).replace(/\'/g, '\\\''); // Only sends API.AI the first 256 characters as it can't hanlogger.tracee more than that
+		const messageToApiai = text.substring(0, 256).replace(/\'/g, '\\\'').replace(/([\uE000-\uF8FF]|\uD83C[\uDF00-\uDFFF]|\uD83D[\uDC00-\uDDFF])/g, ''); // Only sends API.AI the first 256 characters as it can't hanlogger.tracee more than that
 		const headers = {
 			'Content-Type': 'application/json; charset=utf-8',
 			'Authorization': 'Bearer bdeba24b4bcf40feb24a1b8c1f86f3f3'
@@ -333,6 +333,7 @@ const processNLP = function(sender, text, contexts) {
 			if (!error && response.statusCode == 200) {
         const result = JSON.parse(body).result
         result.intent = result.metadata.intentName
+        result.resolvedQuery = text //Should actually just not rely on resolvedQuery later on
 				d.resolve(result)
 			} else {
 				logger.error(error);
