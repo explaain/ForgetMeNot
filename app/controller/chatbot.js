@@ -668,7 +668,7 @@ const getResponseMessage = function(data) {
 						// @TODO: Send carousel
 					} else if (data.memories.length - (data.requestData.hitNum || 0) > 0) {
 						m = data.memories[(data.requestData.hitNum || 0)]
-						m.resultSentence = m.sentence;
+						m.resultSentence = m.actionSentence || m.sentence;
 					} else {
 						data.messageData = [{data: createTextMessage(sender, {text: 'Sorry I couldn\'t find any memories related to that!'})}]
 					}

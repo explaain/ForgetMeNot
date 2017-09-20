@@ -568,62 +568,76 @@ describe('Bulk', function() {
     describe('0001 Action Sentence testing', function() {
       const localSender = '1300120880110773'
       const tests = [
-        ['5', 'Remind me to feed the cat in 5 mins', 'Feed the cat'],
-        ['5', 'Remind me at 5pm to feed the cat', 'Feed the cat'],
-        ['5', 'Remind me at 5pm tomorrow to feed the cat', 'Feed the cat'],
-        ['5', 'Remind me tomorrow at 5pm to feed the cat', 'Feed the cat'],
-        ['4', 'Remind me tomorrow at 5pm to feed the cat, wash the dishes and clean the car', 'Feed the cat, wash the dishes and clean the car'],
-        ['4', 'Tomorrow afternoon remind me to feed the cat, wash the dishes and clean the car', 'Feed the cat, wash the dishes and clean the car'],
-        ['4', 'Next Thursday I need to feed the cat, wash the dishes and clean the car', 'Feed the cat, wash the dishes and clean the car'],
-        ['5', 'I need to clean the car tomorrow', 'Clean the car'],
-        ['5', 'remind me on Friday at 2 pm to send paperwork to new rainbow', 'Send paperwork to new rainbow'],
-        ['5', 'On Friday at 2pm remind me to send paperwork to new rainbow ', 'Send paperwork to new rainbow'],
-        ['5', 'I need to send paperwork to new rainbow at 2pm Friday ', 'Send paperwork to new rainbow'],
-        ['5', 'remind me at 9 am on friday to collect reading books from library', 'Collect reading books from library'],
-        ['5', 'At 9am on Friday I need to collect the reading books from library', 'Collect the reading books from library'],
-        ['5', 'Remind me Friday at 9am I need to collect reading books from library', 'Collect reading books from library'],
-        ['2', 'Tomorrow at 10 am to take the meat loaf out of the freezer', 'Take the meat loaf out of the freezer'],
-        ['4', 'Remind me at 10am tomorrow to take the meat loaf out the freezer', 'Take the meat loaf out the freezer'],
-        ['5', 'remind me at 9 am tomorrow to phone danny and vet', 'Phone Danny and Vet'],
-        ['5', 'At 9am tomorrow I need to phone Danny and vet', 'Phone Danny and Vet'],
-        ['5', 'Remind me tomorrow at 9am I should phone Danny and vet', 'Phone Danny and Vet'],
-        ['5', 'remind me tonight at 8 pm to email Nerissa', 'Email Nerissa'],
-        ['5', 'Tonight at 8pm I need to email Nerissa', 'Email Nerissa'],
-        ['5', 'I need to email Nerissa at 8pm tonight', 'Email Nerissa'],
-        ['5', 'Remind me tomorrow at 2 pm to cancel flu jab', 'Cancel flu jab'],
-        ['5', 'Tomorrow at 2pm remind me to cancel flu jab', 'Cancel flu jab'],
-        ['5', 'Remind me at 2pm tomorrow I need to cancel flu jab', 'Cancel flu jab'],
-        ['5', 'Remind me on Monday at 2 pm to set up emms standing order and cancel Halifax one', 'Set up emms standing order and cancel Halifax one'],
-        ['5', 'At 2pm on Monday I need to set up emms standing order and cancel Halifax one', 'Set up emms standing order and cancel Halifax one'],
-        ['4', 'Monday at 2pm I need to set up emms standing order and cancel Halifax one', 'Set up emms standing order and cancel Halifax one'],
-        ['5', 'Remind me on Wednesday morning at 10 am to call vet', 'Call vet'],
-        ['4', 'I need to call the vet at 10am on Wednesday ', 'Call the vet'],
-        ['5', 'Remind me at 10am on Wednesday to call vet', 'Call vet'],
+        { weight: '5', sentence: 'Remind me to feed the cat in 5 mins', actionSentence: 'Feed the cat', delay: '0.00347222222222222',  },
+        { weight: '5', sentence: 'Remind me at 5pm to feed the cat', actionSentence: 'Feed the cat', timeNextM: '0.708333333333333', dateTime: '2017-09-21T16:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me at 5pm tomorrow to feed the cat', actionSentence: 'Feed the cat', timeTomorrowM: '0.708333333333333', dateTime: '2017-09-21T16:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me tomorrow at 5pm to feed the cat', actionSentence: 'Feed the cat', timeTomorrowM: '0.708333333333333', dateTime: '2017-09-21T16:00:00.000Z',  },
+        { weight: '4', sentence: 'Remind me tomorrow at 5pm to feed the cat, wash the dishes and clean the car', actionSentence: 'Feed the cat, wash the dishes and clean the car', timeTomorrowM: '0.708333333333333', dateTime: '2017-09-21T16:00:00.000Z',  },
+        { weight: '4', sentence: 'Tomorrow afternoon remind me to feed the cat, wash the dishes and clean the car', actionSentence: 'Feed the cat, wash the dishes and clean the car', timeTomorrowM: '0.541666666666667', dateTime: '2017-09-21T13:00:00.000Z',  },
+        { weight: '4', sentence: 'Next Thursday I need to feed the cat, wash the dishes and clean the car', actionSentence: 'Feed the cat, wash the dishes and clean the car',  },
+        { weight: '5', sentence: 'I need to clean the car tomorrow', actionSentence: 'Clean the car', timeTomorrowM: '0.333333333333333',  },
+        { weight: '5', sentence: 'remind me on Friday at 2 pm to send paperwork to new rainbow', actionSentence: 'Send paperwork to new rainbow', dateTime: '2017-09-22T13:00:00.000Z',  },
+        { weight: '5', sentence: 'On Friday at 2pm remind me to send paperwork to new rainbow ', actionSentence: 'Send paperwork to new rainbow', dateTime: '2017-09-22T13:00:00.000Z',  },
+        { weight: '5', sentence: 'I need to send paperwork to new rainbow at 2pm Friday ', actionSentence: 'Send paperwork to new rainbow', dateTime: '2017-09-22T13:00:00.000Z',  },
+        { weight: '5', sentence: 'remind me at 9 am on friday to collect reading books from library', actionSentence: 'Collect reading books from library', dateTime: '2017-09-22T08:00:00.000Z',  },
+        { weight: '5', sentence: 'At 9am on Friday I need to collect the reading books from library', actionSentence: 'Collect the reading books from library', dateTime: '2017-09-22T08:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me Friday at 9am I need to collect reading books from library', actionSentence: 'Collect reading books from library', dateTime: '2017-09-22T08:00:00.000Z',  },
+        { weight: '2', sentence: 'Tomorrow at 10 am to take the meat loaf out of the freezer', actionSentence: 'Take the meat loaf out of the freezer', timeTomorrowM: '0.416666666666667', dateTime: '2017-09-21T09:00:00.000Z',  },
+        { weight: '4', sentence: 'Remind me at 10am tomorrow to take the meat loaf out the freezer', actionSentence: 'Take the meat loaf out the freezer', timeTomorrowM: '0.416666666666667', dateTime: '2017-09-21T09:00:00.000Z',  },
+        { weight: '5', sentence: 'remind me at 9 am tomorrow to phone danny and vet', actionSentence: 'Phone Danny and Vet', timeTomorrowM: '0.375', dateTime: '2017-09-21T08:00:00.000Z',  },
+        { weight: '5', sentence: 'At 9am tomorrow I need to phone Danny and vet', actionSentence: 'Phone Danny and Vet', timeTomorrowM: '0.375', dateTime: '2017-09-21T08:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me tomorrow at 9am I should phone Danny and vet', actionSentence: 'Phone Danny and Vet', timeTomorrowM: '0.375', dateTime: '2017-09-21T08:00:00.000Z',  },
+        { weight: '5', sentence: 'remind me tonight at 8 pm to email Nerissa', actionSentence: 'Email Nerissa', timeTodayM: '0.833333333333333', dateTime: '2017-09-20T19:00:00.000Z',  },
+        { weight: '5', sentence: 'Tonight at 8pm I need to email Nerissa', actionSentence: 'Email Nerissa', timeTodayM: '0.833333333333333', dateTime: '2017-09-20T19:00:00.000Z',  },
+        { weight: '5', sentence: 'I need to email Nerissa at 8pm tonight', actionSentence: 'Email Nerissa', timeTodayM: '0.833333333333333', dateTime: '2017-09-20T19:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me tomorrow at 2 pm to cancel flu jab', actionSentence: 'Cancel flu jab', timeTomorrowM: '0.583333333333333', dateTime: '2017-09-21T13:00:00.000Z',  },
+        { weight: '5', sentence: 'Tomorrow at 2pm remind me to cancel flu jab', actionSentence: 'Cancel flu jab', timeTomorrowM: '0.583333333333333', dateTime: '2017-09-21T13:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me at 2pm tomorrow I need to cancel flu jab', actionSentence: 'Cancel flu jab', timeTomorrowM: '0.583333333333333', dateTime: '2017-09-21T13:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me on Monday at 2 pm to set up emms standing order and cancel Halifax one', actionSentence: 'Set up emms standing order and cancel Halifax one', dateTime: '2017-09-25T13:00:00.000Z',  },
+        { weight: '5', sentence: 'At 2pm on Monday I need to set up emms standing order and cancel Halifax one', actionSentence: 'Set up emms standing order and cancel Halifax one', dateTime: '2017-09-25T13:00:00.000Z',  },
+        { weight: '4', sentence: 'Monday at 2pm I need to set up emms standing order and cancel Halifax one', actionSentence: 'Set up emms standing order and cancel Halifax one', dateTime: '2017-09-25T13:00:00.000Z',  },
+        { weight: '2', sentence: 'Remind me on Wednesday morning at 10 am to call vet', actionSentence: 'Call vet', dateTime: '2017-09-27T09:00:00.000Z',  },
+        { weight: '4', sentence: 'I need to call the vet at 10am on Wednesday ', actionSentence: 'Call the vet', dateTime: '2017-09-27T09:00:00.000Z',  },
+        { weight: '5', sentence: 'Remind me at 10am on Wednesday to call vet', actionSentence: 'Call vet', dateTime: '2017-09-27T09:00:00.000Z',  },
       ]
       var score = 0,
           total = 0
       tests.forEach(function(test) {
-        describe('"' + test[1] + '"', function() {
+        describe('"' + test.sentence + '"', function() {
           const results = {}
-          before(function(done) {
-            sendChatbotRequest(localSender, test[1], results, done)
-          });
-          if (test[0] > 2) {
-            it('"' + test[2] + '"', function(done) {
+          if (test.weight > 2) {
+            before(function(done) {
+              sendChatbotRequest(localSender, test.sentence, results, done)
+            });
+            it('"' + test.actionSentence + '"', function(done) {
               const aS = results.body.memories[0].actionSentence
-              const passed = (aS.substring(2, aS.length).toLowerCase() == test[2].toLowerCase()) || (aS.substring(3, aS.length).toLowerCase() == test[2].toLowerCase())
-              total += parseInt(test[0])
+              const passed = (aS.substring(2, aS.length).toLowerCase() == test.actionSentence.toLowerCase()) || (aS.substring(3, aS.length).toLowerCase() == test.actionSentence.toLowerCase())
+              total += parseInt(test.weight)
               if (passed) {
-                score += parseInt(test[0])
+                score += parseInt(test.weight)
               } else {
-                logger.info(aS)
+                logger.warn(aS)
               }
               assert(passed)
               done()
             })
+            if (test.dateTime) {
+              it('"' + test.dateTime + '"', function(done) {
+                const dT = results.body.memories[0].triggerDateTime
+                const passed = dT == test.dateTime
+                total += parseInt(test.weight)
+                if (passed) {
+                  score += parseInt(test.weight)
+                } else {
+                  logger.info(dT)
+                }
+                assert(passed)
+                done()
+              })
+            }
           } else {
-            total += parseInt(test[0])
-            it('"' + test[2] + '"')
+            total += parseInt(test.weight)
+            it('"' + test.actionSentence + '"')
           }
         })
       })

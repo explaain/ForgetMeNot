@@ -609,6 +609,25 @@ const getDateTimeNum = function(dateTimeOriginal, memory) {
   //   dateTimeNum += 86400000;
 
   // Trying out replacing all the above with Sherlock
+
+  var sherlockTime = Sherlock.parse(memory.sentence).startDate
+  var apiTime = new Date(dateTimeOriginal[0]).getTime() || new Date(dateTimeOriginal[0].split('/')[0]).getTime()
+  if (!apiTime) {
+    const d = dateTimeOriginal[0].split(':')
+    apiTime = new Date().setHours(d[0], d[1], d[2])
+  }
+  apiTime = new Date(apiTime)
+  // logger.info(apiTime)
+  // logger.info(sherlockTime)
+  // logger.info(apiTime.getTime())
+  // logger.info(sherlockTime.getTime())
+  var diff = sherlockTime - apiTime + 3600000
+  var myTest = diff < 2000
+  // if (myTest)
+  //   logger.warn(myTest)
+  // else
+  //   logger.info(myTest)
+
   const dateTimeNum = Sherlock.parse(memory.sentence).startDate.getTime()
 	return dateTimeNum
 }
