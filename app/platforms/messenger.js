@@ -219,6 +219,7 @@ function sendMessageAfterDelay(message, delay, endpoint) {
 	setTimeout(function() {
 		callSendAPI(message, endpoint)
 		.then(function(body) {
+      sendSenderAction(message.recipient.id, 'typing_off');
 			d.resolve(body)
 		}).catch(function(err) {
       logger.error(err)

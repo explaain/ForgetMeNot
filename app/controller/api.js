@@ -654,6 +654,7 @@ const scheduleReminder = function(memory) {
 	schedule.scheduleJob(memory.triggerDateTime, function(){
     delete memory.resultSentence
     const data = {
+      statusCode: 200,
       requestData: {
         sender: memory.reminderRecipient || memory.userID,
         intent: 'reminder.dateTime'

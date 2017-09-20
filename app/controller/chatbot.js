@@ -668,7 +668,7 @@ const getResponseMessage = function(data) {
 						// @TODO: Send carousel
 					} else if (data.memories.length - (data.requestData.hitNum || 0) > 0) {
 						m = data.memories[(data.requestData.hitNum || 0)]
-						m.resultSentence = m.actionSentence || m.sentence;
+						m.resultSentence = m.sentence;
 					} else {
 						data.messageData = [{data: createTextMessage(sender, {text: 'Sorry I couldn\'t find any memories related to that!'})}]
 					}
@@ -740,7 +740,7 @@ const getResponseMessage = function(data) {
 	logger.log(m)
 	if (!data.messageData && m) {
 		m = prepareResult(sender, m)
-		data.messageData = [{data: createTextMessage(sender, {text: m.resultSentence, attachment: m.attachments && m.attachments[0] || null}, quickReplies)}]
+		data.messageData = [{data: createTextMessage(sender, {text: m.resultSentence || m.actionSentence || m.sentence, attachment: m.attachments && m.attachments[0] || null}, quickReplies)}]
 	}
 
 	// ???
