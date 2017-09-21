@@ -125,7 +125,8 @@ exports.handleMessage = function(req, res) {
     res.sendStatus(200);
   }).catch(function(e) {
     logger.error(e)
-    res.sendStatus(400);
+    res.sendStatus(200);
+    // res.sendStatus(400);
   })
 }
 
