@@ -5,6 +5,7 @@
 //TODO: reminders push back 9pm to 9am instead of 9pm the next day
 //TODO: dateTime extractor libraries
 //TODO: remove scheduled reminders when the memory is deleted
+//TODO: handle API.ai error
 
 
 const request = require('request');
@@ -336,6 +337,7 @@ const processNLP = function(sender, text, contexts) {
         result.resolvedQuery = text //Should actually just not rely on resolvedQuery later on
 				d.resolve(result)
 			} else {
+        // Need to handle this properly
 				logger.error(error);
 				d.reject(error)
 			}
