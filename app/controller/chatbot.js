@@ -212,20 +212,25 @@ exports.handleMessage = function(body) {
 
 const onboardingCheck = function(sender, intent) {
 	logger.info(intent)
-	switch (intent) {
-		case 'storeMemory':
-			const textMessage = createTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?")
-			return getContext(sender, 'onboarding') ? [{data: textMessage, delay: 2000}] : [];
-			break;
+	if (getContext(sender, 'onboarding')) {
+		switch (intent) {
+			case 'storeMemory':
+				const textMessage = createTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?")
+				return [{data: textMessage, delay: 2000}]
+				break;
 
-		case 'query':
-			const textMessage1 = createTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮")
-			const textMessage2 = createTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...")
-			return getContext(sender, 'onboarding') ? [{data: textMessage1, delay: 2000}, {data: textMessage2, delay: 4000}] : [];
-			break;
+			case 'query':
+				const textMessage1 = createTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮")
+				const textMessage2 = createTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...")
+				setContext(sender, 'onboarding', false);
+				return [{data: textMessage1, delay: 2000}, {data: textMessage2, delay: 4000}]
+				break;
 
-		default:
-			return []
+			default:
+				return []
+		}
+	} else {
+		return []
 	}
 }
 
