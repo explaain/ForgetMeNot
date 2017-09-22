@@ -1,6 +1,7 @@
 //@TODO: Sort delays (currently always 0)
 //@TODO: Sort endpoints (currently always message endpoint - not attachment)
 //@TODO: Investigate the default quick replies now being on all types of message...
+//@TODO: Link attachments seem to break it?
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
 
@@ -95,7 +96,7 @@ var setupGetStartedButton = function() {
 				json: {
 				  "get_started": {
 				    "payload": properties.facebook_get_started_payload
-					}
+					},
 			  }
 		  };
 			return requestPromise(create)

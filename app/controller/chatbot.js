@@ -122,12 +122,11 @@ exports.handleMessage = function(body) {
 				totalFailCount: 0
 			}
 			setContext(sender, 'failing', false);
+			var firstPromise;
 			try {
 				postback = null;
 				postback = event.postback.payload;
 			} catch (err) {}
-			logger.trace()
-			var firstPromise;
 			if (postback) {
 				firstPromise = handlePostbacks({sender: sender}, postback)
 				logger.trace()
@@ -145,7 +144,7 @@ exports.handleMessage = function(body) {
 							createTextMessage(sender, "Test reply!");
 							break;
 						case "begin":
-							firstMessage(sender);
+							firstPromise = handlePostbacks({sender: sender}, properties.facebook_get_started_payload)
 							break;
 						case "account":
 							fetchUserData(sender);
@@ -193,16 +192,15 @@ exports.handleMessage = function(body) {
 				if (res && res.memories) { //Not sure if this is the right condition?
 					setContext(sender, 'lastAction', res)
 				}
+				if (responseMessage) responseMessage.messageData.push.apply(responseMessage.messageData, onboardingCheck(sender, res.requestData.intent))
+				logger.info(responseMessage.messageData)
 				d.resolve(responseMessage)
+			}).then(function() {
+
 			}).catch(function(e) {
 				logger.error(e)
 				d.reject(e)
 			}).done()
-
-			// 	}).catch(function(e) {
-			// 		giveUp(sender);
-			// 	})
-			// })
 		});
 	} catch(e) {
 		logger.error('-- Error processing the webhook! --')
@@ -211,6 +209,26 @@ exports.handleMessage = function(body) {
 	}
 	return d.promise
 }
+
+const onboardingCheck = function(sender, intent) {
+	logger.info(intent)
+	switch (intent) {
+		case 'storeMemory':
+			const textMessage = createTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?")
+			return getContext(sender, 'onboarding') ? [{data: textMessage, delay: 2000}] : [];
+			break;
+
+		case 'query':
+			const textMessage1 = createTextMessage(sender, "Actually you now have two powers! With me, you also get the power of Unlimited Memory 😎😇🔮")
+			const textMessage2 = createTextMessage(sender, "Now feel free to remember anything below - text, images, video links you name it...")
+			return getContext(sender, 'onboarding') ? [{data: textMessage1, delay: 2000}, {data: textMessage2, delay: 4000}] : [];
+			break;
+
+		default:
+			return []
+	}
+}
+
 
 // not sure if this method is needed any longer as get started seems to work
 /*exports.createGetStarted = function(req, res) {
@@ -239,23 +257,31 @@ curl -X POST -H "Content-Type: application/json" -d '{
 
 const handlePostbacks = function(requestData, payload) {
 	const d = Q.defer()
-	const payloadCode = payload.split('-data-')[0]
-	const payloadData = payload.split('-data-')[1]
-	switch (payloadCode) {
-		case 'GET_STARTED_PAYLOAD':
-			//sendSenderAction(sender, 'typing_on');
-			firstMessage(sender); // Need to sort this
-			break;
+	try {
+		const payloadCode = payload.split('-data-')[0]
+		const payloadData = payload.split('-data-')[1]
+		switch (payloadCode) {
+			case properties.facebook_get_started_payload: //Should this be in messenger.js?
+				logger.info()
+				// sendSenderAction(sender, 'typing_on');
+				var allMessageData = firstMessage(requestData.sender)
+				logger.info(allMessageData)
+				d.resolve({requestData: requestData, messageData: allMessageData})
+				break;
 
-		case "REQUEST_SPECIFIC_MEMORY":
-			var data = getContext(sender, 'lastAction')
-			data.requestData.hitNum = parseInt(payloadData)
-			delete data.messageData
-			d.resolve(data)
-			break;
+			case "REQUEST_SPECIFIC_MEMORY":
+				var data = getContext(sender, 'lastAction')
+				data.requestData.hitNum = parseInt(payloadData)
+				delete data.messageData
+				d.resolve(data)
+				break;
 
-		default:
-
+			default:
+				d.reject()
+		}
+	} catch(e) {
+		logger.error(e)
+		d.reject(e)
 	}
 	return d.promise
 }
@@ -329,19 +355,19 @@ const handleQuickReplies = function(requestData, quickReply) {
 			break;
 
 		case "CORRECTION_GET_DATETIME":
-			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?", 0, []);
+			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?", []);
 			setContext(sender, 'apiaiContexts', [{name: 'requiring-date-time', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "CORRECTION_GET_URL":
-			var messageData = createTextMessage(sender, "Sure thing - what's the url?", 0, []);
+			var messageData = createTextMessage(sender, "Sure thing - what's the url?", []);
 			setContext(sender, 'apiaiContexts', [{name: 'requiring-url', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "PREPARE_ATTACHMENT":
-			var messageData = createTextMessage(sender, "Sure thing - type your message below and I'll attach it...", 0, [])
+			var messageData = createTextMessage(sender, "Sure thing - type your message below and I'll attach it...", [])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
@@ -551,32 +577,31 @@ function sendCorrectionMessage(recipientId) {
 }
 
 function firstMessage(recipientId) {
-	logger.trace(firstMessage);
-	const d = Q.defer()
+	logger.trace();
 	setContext(sender, 'onboarding', true);
 
-  var messageData = {
-    recipient: {
-      id: recipientId
-    },
-    message: {
-      text: "Hello there!"
-    }
-  };
-  d.resolve(messageData);
-	setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
-	setTimeout(function() {
-		createTextMessage(recipientId, "Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇", 0, []);
-		setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
-		setTimeout(function() {
-			createTextMessage(recipientId, "Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍", 0, []);
-			setTimeout(function() {sendSenderAction(sender, 'typing_on');}, 500);
-			setTimeout(function() {
-				createTextMessage(recipientId, "To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility", 0, []);
-			}, 6000);
-		}, 4000);
-	}, 1000);
-	return d.promise
+	const messages = [
+		"Hello there!",
+		"Nice to meet you. I'm ForgetMeNot, your helpful friend with (if I say so myself) a pretty darn good memory! 😇",
+		"Ask me to remember things and I'll do just that. Then later you can ask me about them and I'll remind you! 😍",
+		"To get started, let's try an example. Try typing the following: \n\nMy secret superpower is invisibility",
+	]
+
+	const allMessageData = messages.map(function(text, i) {
+		return {
+			data: {
+				recipient: {
+					id: recipientId
+				},
+				message: {
+					text: text
+				}
+			},
+			delay: i*3000
+		}
+	})
+	logger.info(allMessageData)
+	return allMessageData
 }
 
 
@@ -749,14 +774,6 @@ const getResponseMessage = function(data) {
 	}
 
 	return data
-	// .then(function(data) {
-	// 	messageData = data
-	// 	return getContext(sender, 'onboarding') ? createTextMessage(sender, "Now try typing: \n\nWhat\'s my secret superpower?", 1500, []) : Q.fcall(function() {return null});
-	// }).then(function() {
-	// 	d.resolve(result);
-	// }).catch(function(e) {
-	// 	d.reject(e);
-	// })
 }
 
 
@@ -843,7 +860,9 @@ exports.getContext = getContext;
 
 
 
-// --- Not current in use ---
+// --- Not currently in use ---
+
+
 const googleMapsClient = require('../api_clients/googleMapsClient.js');
 // models for users and the memories/reminders they submit
 const user = require('../model/user');
