@@ -1,12 +1,10 @@
-//@TODO: figure out first message after Get started
-//@TODO: Refactor onboarding
-// ---
 //@TODO: Make sure messageData.message.quick_replies is never existing yet empty!
 //@TODO: general error handling!
 //@TODO: always accept storeMemory after attachment (?)
 //@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
 //@TODO: Don't do default quick replies when bot asks for info
 //@TODO: Have timeout on unresolved webhooks
+//@TODO: Put GIFs back in (occasionally)
 
 
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
@@ -182,7 +180,16 @@ exports.handleMessage = function(body) {
 					}
 					setContext(sender, 'expectingAttachment', null);
 				} else if ((attachments = event.message.attachments)) {
-					firstPromise = prepareAttachments({sender: sender}, attachments)
+					logger.info(attachments)
+					if (!attachments[0].payload.sticker_id) {
+						firstPromise = prepareAttachments({sender: sender}, attachments)
+					}
+					else {
+						const p = Q.defer()
+						logger.info('Sticker sent - sending no response')
+						p.resolve()
+						firstPromise = p.promise
+					}
 				}
 			}
 
@@ -193,7 +200,6 @@ exports.handleMessage = function(body) {
 					setContext(sender, 'lastAction', res)
 				}
 				if (responseMessage) responseMessage.messageData.push.apply(responseMessage.messageData, onboardingCheck(sender, res.requestData.intent))
-				logger.info(responseMessage.messageData)
 				d.resolve(responseMessage)
 			}).then(function() {
 

@@ -102,7 +102,7 @@ Randoms.texts.dissatisfaction = [
 	'Oh no, I\'m sorry, let\'s try again 🙏',
   'Oops, sorry about that',
   'Sorry for messing up, can we try again?',
-	'Looks like I messed up, can we try again?'
+	'Looks like I messed up, can we try again?',
 ];
 Randoms.gifs.dissatisfaction = [
 	'https://media.giphy.com/media/gnJgBlPgHtcnS/giphy.gif',
@@ -121,7 +121,7 @@ Randoms.texts.apology = [
 	'That\'s okay',
 	'No problem - we all make mistakes!',
 	'Don\'t worry!',
-	'We\'re all good 🙂'
+	'We\'re all good 🙂',
 ];
 
 Randoms.texts.compliment = [
