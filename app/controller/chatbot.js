@@ -1,4 +1,4 @@
-//@TODO: Make sure messageData.message.quick_replies is never existing yet empty!
+//TODO: ask about reminders at unsociable hours
 //@TODO: general error handling!
 //@TODO: always accept storeMemory after attachment (?)
 //@TODO: Stop interpreting thumbs up as attachment - interpret it as 'affirmation' instead
@@ -180,7 +180,6 @@ exports.handleMessage = function(body) {
 					}
 					setContext(sender, 'expectingAttachment', null);
 				} else if ((attachments = event.message.attachments)) {
-					logger.info(attachments)
 					if (!attachments[0].payload.sticker_id) {
 						firstPromise = prepareAttachments({sender: sender}, attachments)
 					}
@@ -217,7 +216,6 @@ exports.handleMessage = function(body) {
 }
 
 const onboardingCheck = function(sender, intent) {
-	logger.info(intent)
 	if (getContext(sender, 'onboarding')) {
 		switch (intent) {
 			case 'storeMemory':
@@ -273,10 +271,8 @@ const handlePostbacks = function(requestData, payload) {
 		const payloadData = payload.split('-data-')[1]
 		switch (payloadCode) {
 			case properties.facebook_get_started_payload: //Should this be in messenger.js?
-				logger.info()
 				// sendSenderAction(sender, 'typing_on');
 				var allMessageData = firstMessage(requestData.sender)
-				logger.info(allMessageData)
 				d.resolve({requestData: requestData, messageData: allMessageData})
 				break;
 
@@ -301,7 +297,9 @@ const handleQuickReplies = function(requestData, quickReply) {
 	logger.trace(handleQuickReplies)
 	const d = Q.defer()
 	const sender = requestData.sender
-	switch (quickReply.payload) {
+	const quickReplyCode = quickReply.payload.split('-data-')[0]
+	const quickReplyData = quickReply.payload.split('-data-')[1]
+	switch (quickReplyCode) {
 		case "USER_FEEDBACK_MIDDLE":
 			var messageData = sendCorrectionMessage(sender)
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
@@ -366,20 +364,25 @@ const handleQuickReplies = function(requestData, quickReply) {
 			break;
 
 		case "CORRECTION_GET_DATETIME":
-			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?", []);
+			var messageData = createTextMessage(sender, "Sure thing - when shall I remind you?");
 			setContext(sender, 'apiaiContexts', [{name: 'requiring-date-time', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "CORRECTION_GET_URL":
-			var messageData = createTextMessage(sender, "Sure thing - what's the url?", []);
+			var messageData = createTextMessage(sender, "Sure thing - what's the url?");
 			setContext(sender, 'apiaiContexts', [{name: 'requiring-url', lifespan: 1}])
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 			break;
 
 		case "PREPARE_ATTACHMENT":
-			var messageData = createTextMessage(sender, "Sure thing - type your message below and I'll attach it...", [])
+			var messageData = createTextMessage(sender, "Sure thing - type your message below and I'll attach it...")
 			d.resolve({requestData: requestData, messageData: [{data: messageData}]})
+			break;
+
+		case "INTENT":
+			requestData.intent = quickReplyData
+			d.resolve({requestData: requestData, statusCode: 200})
 			break;
 
 		default:
@@ -611,27 +614,30 @@ function firstMessage(recipientId) {
 			delay: i*3000
 		}
 	})
-	logger.info(allMessageData)
 	return allMessageData
 }
 
 
 const getQuickReplies = function(quickReplies, useDefaults) {
-	if (!quickReplies && useDefaults) {
-		quickReplies = [
-			["😍", "USER_FEEDBACK_TOP"],
-			["✏️", "USER_FEEDBACK_MIDDLE"],
-			["😔", "USER_FEEDBACK_BOTTOM"],
-		]
-	}
-	logger.log(quickReplies)
-	return quickReplies.map(function(r) {
-		return {
-			content_type: "text",
-			title: r[0],
-			payload: r[1]
+	if (!quickReplies || !quickReplies.length) {
+		if (useDefaults) {
+			quickReplies = [
+				["😍", "USER_FEEDBACK_TOP"],
+				["✏️", "USER_FEEDBACK_MIDDLE"],
+				["😔", "USER_FEEDBACK_BOTTOM"],
+			]
+		} else {
+			return null
 		}
-	})
+	} else {
+		return quickReplies.map(function(r) {
+			return {
+				content_type: "text",
+				title: r[0],
+				payload: r[1]
+			}
+		})
+	}
 }
 
 function fetchUserDataFromFacebook(recipientId) {
@@ -692,6 +698,7 @@ const getResponseMessage = function(data) {
 	var intent = data.requestData.intent
 	if (intent == 'provideDateTime') intent = 'setTask.dateTime'
 	if (intent == 'provideURL') intent = 'setTask.URL'
+	var followUp = null
 	switch (data.statusCode) {
 		case 200:
 			logger.trace()
@@ -725,6 +732,15 @@ const getResponseMessage = function(data) {
 					 												+ m.actionSentence + '\n'
 																	+ '🗓 ' + m.triggerDateTime.toDateString() + '\n'
 																	+ '⏱ ' + m.triggerDateTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'} )
+					var extraQuickReplies = [
+						["You bet", "INTENT-data-affirmation",],
+						["No, change the time please!", "CORRECTION_GET_DATETIME"]
+					]
+					if (m.triggerDateTime.getHours() >= 23 || m.triggerDateTime.getHours() <= 5) followUp = createTextMessage(data.requestData.sender, "Just to check - I've set this reminder for a slightly unsociable hour..! 😴 Was that what you meant?", extraQuickReplies)
+					if (m.triggerDateTime < new Date()) {
+						setContext(sender, 'apiaiContexts', [{name: 'requiring-date-time', lifespan: 1}])
+						data.messageData = [{data: createTextMessage(data.requestData.sender, "Hmmm, I understood that date & time to be in the past...! ⏳ Can you try typing it again?")}]
+					}
 
 					break;
 
@@ -777,6 +793,7 @@ const getResponseMessage = function(data) {
 	if (!data.messageData && m) {
 		m = prepareResult(sender, m)
 		data.messageData = [{data: createTextMessage(sender, {text: m.resultSentence || m.actionSentence || m.sentence, attachment: m.attachments && m.attachments[0] || null}, quickReplies)}]
+		if (followUp) data.messageData.push({data: followUp, delay: 2000})
 	}
 
 	// ???

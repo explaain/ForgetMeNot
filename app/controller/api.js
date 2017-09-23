@@ -2,10 +2,11 @@
 //TODO: reminders that are too soon
 //TODO: reminders when clocks differ between devices
 //TODO: timezones
-//TODO: reminders push back 9pm to 9am instead of 9pm the next day
 //TODO: dateTime extractor libraries
 //TODO: remove scheduled reminders when the memory is deleted
 //TODO: handle API.ai error
+//TODO: delete Cloudinary images when deleting memories
+//TODO: account for API.ai grabbing both trigger-time and trigger-date
 
 
 const request = require('request');
@@ -614,6 +615,14 @@ const getDateTimeNum = function(dateTimeOriginal, memory) {
   // Trying out replacing all the above with Sherlock
 
   var sherlockTime = Sherlock.parse(memory.sentence).startDate
+  if (!sherlockTime.hasMeridian && sherlockTime.getHours() > 12) {
+    sherlockAmTime = new Date(sherlockTime - 43200000)
+    if (sherlockAmTime.getHours() > 7 && sherlockAmTime > new Date()) {
+      logger.info('Resetting to AM')
+      sherlockTime = sherlockAmTime
+    }
+  }
+
   var apiTime = new Date(dateTimeOriginal[0]).getTime() || new Date(dateTimeOriginal[0].split('/')[0]).getTime()
   if (!apiTime) {
     const d = dateTimeOriginal[0].split(':')
@@ -631,7 +640,7 @@ const getDateTimeNum = function(dateTimeOriginal, memory) {
   // else
   //   logger.info(myTest)
 
-  const dateTimeNum = Sherlock.parse(memory.sentence).startDate.getTime()
+  const dateTimeNum = sherlockTime.getTime()
 	return dateTimeNum
 }
 
