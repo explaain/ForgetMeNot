@@ -1,8 +1,7 @@
+//TODO: check that scheduled reminders include attachments
 //TODO: intent 'nextResult'
-//TODO: reminders that are too soon
-//TODO: reminders when clocks differ between devices
 //TODO: timezones
-//TODO: dateTime extractor libraries
+//TODO: reminders when clocks differ between devices
 //TODO: remove scheduled reminders when the memory is deleted
 //TODO: handle API.ai error
 //TODO: delete Cloudinary images when deleting memories
@@ -184,7 +183,8 @@ const routeByIntent = function(requestData) {
         }
 				if (memory.triggerURL) {
 					memory.triggerURL = memory.triggerURL[0]
-					memory.actionSentence = getActionSentence(memory.sentence, memory.context)
+					memory.actionSentence = getActionSentence2(memory.sentence, memory.context)
+          logger.info(memory.actionSentence)
           data.memories = [memory]
 					storeMemory(memory)
 					.then(function() {
@@ -715,6 +715,31 @@ const fetchListItemCards = function(cards) {
   return d.promise
 }
 
+
+const getActionSentence2 = function(sentence, context, reminder) {
+  logger.info(sentence)
+  const splitSecond = [
+    'need to',
+    'emind you to',
+    'emind you'
+  ]
+  const splitFirst = [
+    'when you',
+    'next time'
+  ]
+  var text = sentence
+  splitSecond.forEach(function(phrase) {
+    if (sentence.indexOf(phrase) > -1 && text == sentence)
+      text = sentence.split(phrase)[1]
+  })
+  var text1 = text
+  splitFirst.forEach(function(phrase) {
+    if (text.indexOf(phrase) > -1 && text1 == text)
+      text1 = text.split(phrase)[0]
+  })
+  text1 = rewriteSentence(text1, reminder)
+  return getEmojis(text1) + ' ' + text1;
+}
 
 
 const getActionSentence = function(sentence, context, reminder) {

@@ -530,7 +530,7 @@ function getCarouselMessage(recipientId, elements, delay, quickReplies) {
 		}
   };
 	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
-	if (!messageData.message.quick_replies.length) delete messageData.message.quick_replies
+	if (messageData.message.quick_replies && !messageData.message.quick_replies.length) delete messageData.message.quick_replies
   return messageData
 }
 // function sendAttachmentMessage(recipientId, attachment, delay, quickReplies) {
