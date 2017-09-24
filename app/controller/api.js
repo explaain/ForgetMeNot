@@ -14,6 +14,7 @@ const emoji = require('moji-translate');
 const schedule = require('node-schedule');
 const chrono = require('chrono-node')
 const Sherlock = require('sherlockjs');
+const crypto = require("crypto");
 
 const properties = require('../config/properties.js');
 
@@ -555,43 +556,65 @@ const fetchUserData = function(userID, forceRefresh) {
 		.then(function(userData) {
 			d.resolve(userData)
 		}).catch(function(e) {
-      logger.error(e)
-			d.reject(404)
+      logger.info('hello')
+      logger.info(e.statusCode)
+      if (e.statusCode == 404 || e.statusCode == '404') {
+        logger.info('yoyo')
+        createUserAccount({objectID: userID})
+        .then(function(userData) {
+          d.resolve(userData)
+        }).catch(function(e) {
+          logger.error(e)
+          d.reject(e)
+        })
+      } else {
+        logger.error(e)
+        d.reject(e)
+      }
 		})
 	}
 	return d.promise
 }
 const fetchUserDataFromDb = function(userID) {
-	logger.trace(fetchUserDataFromDb)
+	logger.trace()
 	return getDbObject(AlgoliaUsersIndex, userID)
 }
 
 const createUserAccount = function(userData) {
-	logger.trace(createUserAccount)
+	logger.trace()
 	const d = Q.defer()
 
-	// Generate the value to be used for the Secure API key
-	const searchOnlyApiKey = userData.id + '_' + crypto.randomBytes(12).toString('hex');
+  try {
 
-	// Generate Secure API token using this value
-	const params = {
-		filters: 'userID:' + userData.id + ' OR public = true',
-		restrictIndices: properties.algolia_index,
-		userToken: userData.id
-	};
-	var publicKey = AlgoliaClient.generateSecuredApiKey(searchOnlyApiKey, params);
+    userData.dateCreated = new Date()
+  	// Generate the value to be used for the Secure API key
+  	const searchOnlyApiKey = userData.objectID + '_' + crypto.randomBytes(12).toString('hex');
 
-	// Save userData to 'users' Algolia index
-	userData.objectID = userData.id;
-	userData.searchOnlyApiKey = searchOnlyApiKey;
-	delete userData.id;
-	//Save it to current memory
-	getLocalUser(userData.objectID).userData = userData;
+    logger.info()
+  	// Generate Secure API token using this value
+  	const params = {
+  		filters: 'userID:' + userData.objectID + ' OR public = true',
+  		restrictIndices: properties.algolia_index,
+  		userToken: userData.objectID
+  	};
+  	var publicKey = AlgoliaClient.generateSecuredApiKey(searchOnlyApiKey, params);
+    logger.info()
+  	// Save userData to 'users' Algolia index
+  	userData.searchOnlyApiKey = searchOnlyApiKey;
+
+    logger.info()
+  	//Save it to current memory
+  	getLocalUser(userData.objectID).userData = userData;
+    logger.info()
+  } catch(e) {
+    logger.error(e)
+  }
 	AlgoliaUsersIndex.addObject(userData, function(e, content) {
 		if (e) {
 			logger.error(e);
 			d.resolve(e)
 		} else {
+      logger.info(content)
 			d.resolve(content)
 		}
 	});

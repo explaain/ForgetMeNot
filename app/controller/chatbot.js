@@ -14,7 +14,6 @@ const api = require('../controller/api');
 const request = require('request');
 const properties = require('../config/properties.js');
 const schedule = require('node-schedule');
-const crypto = require("crypto");
 const Q = require("q");
 const emoji = require('moji-translate');
 const Randoms = require('../controller/cannedResponses.js').Randoms
