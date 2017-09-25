@@ -190,7 +190,11 @@ exports.handleMessage = function(body) {
 					}
 				}
 			}
-
+			
+			if (!firstPromise || !firstPromise.then) {
+				const message = createTextMessage(sender, 'Sorry, I didn\'t understand that!') // Should use GiveUp function
+				firstPromise = createMessagePromise({sender: sender}, message)
+			}
 			firstPromise
 			.then(function(res) {
 				const responseMessage = res ? getResponseMessage(res) : null
@@ -470,7 +474,19 @@ function sendGenericMessage(recipientId, type, counter) {
 	}
 }
 
-/* function sends message back to user */
+
+
+const createMessagePromise = function(requestData, messageData) {
+	const d = Q.defer()
+	if (messageData) {
+		const data = {requestData: requestData, messageData: [{data: messageData}]}
+		d.resolve(data)
+	} else {
+		d.reject()
+	}
+	return d.promise
+}
+
 
 function createTextMessage(recipientId, message, quickReplies) {
 	logger.trace();
@@ -503,8 +519,7 @@ function createTextMessage(recipientId, message, quickReplies) {
 			}
 			messageData.message.attachment = messageAttachment
 		}
-		messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
-		logger.trace(messageData)
+		messageData.message.quick_replies = getQuickReplies(quickReplies, true)
 		return messageData
 	} catch(e) {
 		logger.error(e)
@@ -528,7 +543,7 @@ function getCarouselMessage(recipientId, elements, delay, quickReplies) {
 			}
 		}
   };
-	messageData.message.quick_replies = getQuickReplies(quickReplies, !quickReplies || quickReplies.length)
+	messageData.message.quick_replies = getQuickReplies(quickReplies, true)
 	if (messageData.message.quick_replies && !messageData.message.quick_replies.length) delete messageData.message.quick_replies
   return messageData
 }
@@ -568,6 +583,8 @@ function sendCorrectionMessage(recipientId) {
   };
 	logger.log(getContext(sender, 'lastAction'))
 	switch (getContext(sender, 'lastAction').requestData.intent) {
+		case 'setTask.dateTime':
+		case 'setTask.URL':
 		case 'storeMemory':
 			var quickReplies = [
 				["💭 Recall a memory", "CORRECTION_STORE_TO_QUERY"]
@@ -628,15 +645,14 @@ const getQuickReplies = function(quickReplies, useDefaults) {
 		} else {
 			return null
 		}
-	} else {
-		return quickReplies.map(function(r) {
-			return {
-				content_type: "text",
-				title: r[0],
-				payload: r[1]
-			}
-		})
 	}
+	return quickReplies.map(function(r) {
+		return {
+			content_type: "text",
+			title: r[0],
+			payload: r[1]
+		}
+	})
 }
 
 function fetchUserDataFromFacebook(recipientId) {
@@ -820,7 +836,7 @@ const getCarousel = function(sender, memories) {
         ]
 			}
 		})
-		return getCarouselMessage(sender, elements, 0, [])
+		return getCarouselMessage(sender, elements)
 	} else {
 		logger.trace('No memories - rejecting carousel');
 		throw new Error(404)
