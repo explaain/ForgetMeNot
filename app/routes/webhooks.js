@@ -1,11 +1,11 @@
 // refactored webhook code
-var apiController = require('../controller/api');
+var messengerController = require('../platforms/messenger');
 
 var express = require('express');
 var router = express.Router();
 
-router.get('/', apiController.tokenVerification);
+router.get('/', messengerController.tokenVerification);
 //router.post('/', apiController.createGetStarted); -- this method is no longer needed (i think)
-router.post('/', apiController.handleMessage);
+router.post('/', messengerController.handleMessage);
 
 module.exports = router;
