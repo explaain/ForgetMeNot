@@ -124,6 +124,7 @@ function initateSlackBot(botKeychain) {
 	bot.on('start', () => {
 		console.log('Slackbot has 🙏 connected.',...arguments)
 
+		// TODO: Remove after debug
     bot.postMessageToChannel('bot-testing', `*I'm your personal mind-palace. Invite me to this channel and ask me to remember things :)*`, {
         icon_emoji: ':sparkles:'
     });
@@ -140,14 +141,13 @@ function initateSlackBot(botKeychain) {
 			var payload = message;
 
 			// Remove reference to @forgetmenot
-			payload.text = payload.text.replace(/@?forgetmenot,?[\s]*/i,'');
-
+			payload.text = payload.text.replace(/^@?forgetmenot,?\s*|^<@?${botKeychain.bot_user_id}>,?\s*/i, '')
 
 			// Should send data to Chatbot and return messages for emitting
 			// TODO: Also support postEphemeral(id, user, text, params)
 			handleMessage(
-				message,
-				(response, options = {}) => bot.postMessage(message.channel, response, options)
+				payload,
+				(text, options = {}) => bot.postMessage(message.channel, text, options)
 			)
 		}
 	})
@@ -159,33 +159,32 @@ exports.handleEvent = function(req, res) {
 	// return res.send(req.body.challenge); // Should only be needed once, to confirm URL
 }
 
-handleMessage = function(message, emitter) {
+handleMessage = function(payload, emitter) {
 	// Transform into Facebook format.
-	var payload = { entry: [ { messaging: [ {
-		sender: { id: message.user },
-		message: { text: message.text }
+	var payloadFormatted = { entry: [ { messaging: [ {
+		sender: { id: payload.user },
+		message: { text: payload.text }
 	} ] } ] }
 
   logger.trace()
   // logger.log(req)
-  chatbotController.handleMessage(payload)
+  chatbotController.handleMessage(payloadFormatted)
   .then(function(apiResult) {
-		// Message formatting DOCS: https://api.slack.com/docs/messages
-    logger.log(apiResult)
     logger.log(JSON.stringify(apiResult, null, 2))
-    return handleMessageGroup(emitter, apiResult)
+		// Message formatting DOCS: https://api.slack.com/docs/messages
+    return handleResponseGroup(emitter, apiResult)
   })
 	.catch(function(e) {
     logger.error(e);
   })
 }
 
-const handleMessageGroup = function(emitter, result) {
+const handleResponseGroup = function(emitter, response) {
   const d = Q.defer();
   const promises = []
-  if (result && result.messageData) {
-    result.messageData.forEach(function(singleMessage) {
-      promises.push(prepareAndSendMessages(emitter, singleMessage.data, singleMessage.delay || 0))
+  if (response && response.messageData) {
+    response.messageData.forEach(function(singleResponse) {
+      promises.push(prepareAndSendResponses(emitter, singleResponse.data, singleResponse.delay || 0))
     })
   }
   Q.allSettled(promises)
@@ -198,27 +197,21 @@ const handleMessageGroup = function(emitter, result) {
   return d.promise;
 }
 
-function prepareAndSendMessages(emitter, messageData, delay) {
-	logger.trace(prepareAndSendMessages);
-	if (messageData.json) console.log(messageData.json.message); // ???
+function prepareAndSendResponses(emitter, responseData, delay) {
+	logger.trace(prepareAndSendResponses);
+	if (responseData.json) console.log(responseData.json.message); // ???
 	const d = Q.defer();
-	const textArray = (messageData.message && messageData.message.text) ? longMessageToArrayOfMessages(messageData.message.text, 640) : [false];
-	const messageDataArray = textArray.map(function(text) {
-		const data = JSON.parse(JSON.stringify(messageData));
-    delete data.message.attachment
-		if (text) data.message.text = text;
-		return data;
-	});
-  if (messageData.message.attachment) {
-    const attachmentMessageData = JSON.parse(JSON.stringify(messageData))
-    delete attachmentMessageData.message.text
-    messageDataArray.push(attachmentMessageData)
+	const responseDataArray = (responseData.message && responseData.message.text) ? [responseData] : [false];
+  if (responseData.message.attachment) {
+    const attachmentResponseData = JSON.parse(JSON.stringify(responseData))
+    delete attachmentResponseData.message.text
+    responseDataArray.push(attachmentResponseData)
   }
   logger.trace()
 	Q.allSettled(
-		messageDataArray.map(function(message, i, array) {
-      if (message.message.attachment) i = Math.max(i-1, 0) // Stop attachements from delaying before sending
-			return sendMessageAfterDelay(emitter, message, delay + i*2000);
+		responseDataArray.map(function(thisResponse, i, array) {
+      if (thisResponse.message.attachment) i = Math.max(i-1, 0) // Stop attachements from delaying before sending
+			return sendResponseAfterDelay(emitter, thisResponse, delay + i*2000);
 		})
 	).then(function(results) {
 		logger.log(results)
@@ -230,48 +223,18 @@ function prepareAndSendMessages(emitter, messageData, delay) {
 	return d.promise;
 }
 
-function longMessageToArrayOfMessages(message, limit) { // limit is in characters
-	logger.trace(longMessageToArrayOfMessages);
-	var counter = 0;
-	var messageArray = [];
-	while (message.length > limit && counter < 30) { // Once confident this loop won't be infinite we can remove the counter
-		const split = splitChunk(message, limit);
-		messageArray.push(split[0]);
-		message = split[1];
-		counter++;
-	}
-	messageArray.push(message);
-	return messageArray;
-}
-
-function splitChunk(message, limit) {
-	logger.trace(splitChunk);
-	var shortened = message.substring(0, limit)
-	if (shortened.indexOf("\n") > -1) shortened = shortened.substring(0, shortened.lastIndexOf("\n"));
-	else if (shortened.indexOf(". ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(". ")+1);
-	else if (shortened.indexOf(": ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(": ")+1);
-	else if (shortened.indexOf("; ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf("; ")+1);
-	else if (shortened.indexOf(", ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(", ")+1);
-	else if (shortened.indexOf(" ") > -1) shortened = shortened.substring(0, shortened.lastIndexOf(" "));
-	var remaining = message.substring(shortened.length, message.length);
-	shortened = shortened.trim().replace(/^\s+|\s+$/g, '').trim();
-	remaining = remaining.trim().replace(/^\s+|\s+$/g, '').trim();
-	return [shortened, remaining];
-}
-
-function sendMessageAfterDelay(emitter, message, delay) {
-	logger.trace(sendMessageAfterDelay);
+function sendResponseAfterDelay(emitter, thisResponse, delay) {
+	logger.trace(sendResponseAfterDelay);
 	const d = Q.defer();
 	var params = {}
-	if(message.quick_replies && message.quick_replies.length > 0) {
+	if(thisResponse.quick_replies && thisResponse.quick_replies.length > 0) {
 		params.attachments = [
 			{
         "attachment_type": "default",
         "actions": []
       }
 		]
-
-		message.quick_replies.forEach(reply => {
+		thisResponse.quick_replies.forEach(reply => {
 			params.attachments.push({
 				"type": "button",
 				"name": reply.title,
@@ -280,11 +243,14 @@ function sendMessageAfterDelay(emitter, message, delay) {
 			})
 		})
 	}
-	// if (!message.sender_action) sendSenderAction(message.recipient.id, 'typing_on');
+	// if (!thisResponse.sender_action) sendSenderAction(thisResponse.recipient.id, 'typing_on');
 	setTimeout(function() {
-		emitter(message.text, params)
-		.then(x => d.resolve(x))
-		.catch(x => d.reject(err))
+		// console.log("I'm about to echo ==>", thisResponse, params)
+		// TODO: Setup buttons
+		// bot.postMessage
+		emitter(thisResponse.message.text, params)
+		.then(x => d.resolve("200 Emitted response",x))
+		.catch(err => d.reject("ERROR Emitted response",err))
 	}, delay);
 	return d.promise;
 }
@@ -292,13 +258,13 @@ function sendMessageAfterDelay(emitter, message, delay) {
 // function sendSenderAction(recipientId, sender_action) {
 // 	logger.trace(sendSenderAction);
 // 	const d = Q.defer()
-//   var messageData = {
+//   var responseData = {
 //     recipient: {
 //       id: recipientId
 //     },
 //     sender_action: sender_action
 //   };
-// 	callSendAPI(messageData, properties.facebook_message_endpoint)
+// 	callSendAPI(responseData, properties.facebook_message_endpoint)
 // 	.then(function(body) {
 // 		d.resolve(body)
 // 	}).catch(function(err) {
