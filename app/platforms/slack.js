@@ -7,6 +7,7 @@ const chrono = require('chrono-node')
 const crypto = require("crypto");
 const Q = require("q");
 const SlackBot = require('slackbots');
+const RtmClient = require('@slack/client').RtmClient;
 
 const tracer = require('tracer')
 const logger = tracer.colorConsole({level: 'log'});
@@ -122,6 +123,8 @@ function initateSlackBot(botKeychain) {
 	bot = new SlackBot({
 	    token: botKeychain.bot_access_token
 	});
+	rtm = new RtmClient(botKeychain.bot_access_token);
+	rtm.start();
 
 	logger.log('New Slackbot connecting.')
 
@@ -167,6 +170,7 @@ function initateSlackBot(botKeychain) {
 				payload,
 				(response, options) => bot.postMessage(message.channel, response.message.text, options)
 			)
+			rtm.sendTyping(message.channel)
 		}
 	})
 

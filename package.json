@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@google/maps": "^0.3.1",
+    "@slack/client": "^3.14.0",
     "algoliasearch": "^3.24.3",
     "apiai": "^4.0.3",
     "body-parser": "^1.16.0",
