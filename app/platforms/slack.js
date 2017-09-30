@@ -298,8 +298,6 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 }
 
 exports.quickreply = function(req, res) {
-	res.status(200).send();
-
 	logger.trace(exports.quickreply);
 
 	var reaction = JSON.parse(req.body.payload);
@@ -317,60 +315,14 @@ exports.quickreply = function(req, res) {
 			username: reaction.user.name
 		}
 	).then(()=>{
-		// Remove buttons
-		bot.updateMessage(
-			reaction.channel.id,
-			reaction.message_ts,
-			reaction.original_message.text,
-			JSON.stringify({attachments:[{actions:"nothing"}]})
-		)
 		var noBtnMessage = reaction.original_message
-		noBtnMessage.attachments = null
-		request({
-			method: "POST",
-			url: reaction.response_url,
-			body: noBtnMessage,
-			headers: {
-				Authorization: reaction.token,
-		   'contentType': 'application/json',
-			}
-		})
-		.then((r)=>logger.log("Updated msg",r))
-		.catch(e=>logger.log(e))
+		noBtnMessage.attachments = {}
+		noBtnMessage.ts = reaction.message_ts;
+		noBtnMessage.channel = reaction.channel.id;
+
+		res.json(noBtnMessage);
 	})
 	.catch(e=>logger.log(e))
-
-	// Post as user
-	// req.body.payload
-	/* {
-  "actions": [
-    {
-      "name": "recommend",
-      "value": "yes",
-      "type": "button"
-    }
-  ],
-  "callback_id": "comic_1234_xyz",
-  "team": {
-    "id": "T47563693",
-    "domain": "watermelonsugar"
-  },
-  "channel": {
-    "id": "C065W1189",
-    "name": "forgotten-works"
-  },
-  "user": {
-    "id": "U045VRZFT",
-    "name": "brautigan"
-  },
-  "action_ts": "1458170917.164398",
-  "message_ts": "1458170866.000004",
-  "attachment_id": "1",
-  "token": "xAB3yVzGS4BQ3O9FACTa8Ho4",
-  "original_message": {"text":"New comic book alert!","attachments":[{"title":"The Further Adventures of Slackbot","fields":[{"title":"Volume","value":"1","short":true},{"title":"Issue","value":"3","short":true}],"author_name":"Stanford S. Strickland","author_icon":"https://api.slack.comhttps://a.slack-edge.com/bfaba/img/api/homepage_custom_integrations-2x.png","image_url":"http://i.imgur.com/OJkaVOI.jpg?1"},{"title":"Synopsis","text":"After @episod pushed exciting changes to a devious new branch back in Issue 1, Slackbot notifies @don about an unexpected deploy..."},{"fallback":"Would you recommend it to customers?","title":"Would you recommend it to customers?","callback_id":"comic_1234_xyz","color":"#3AA3E3","attachment_type":"default","actions":[{"name":"recommend","text":"Recommend","type":"button","value":"recommend"},{"name":"no","text":"No","type":"button","value":"bad"}]}]},
-  "response_url": "https://hooks.slack.com/actions/T47563693/6204672533/x7ZLaiVMoECAW50Gw1ZYAXEM",
-  "trigger_id": "13345224609.738474920.8088930838d88f008e0"
-	} */
 }
 
 exports.dropdown = function() {
