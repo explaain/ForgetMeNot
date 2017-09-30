@@ -135,13 +135,13 @@ function initateSlackBot(botKeychain) {
 
 		// For now, just listen to direct addresses
 		// TODO: In private messages, no address should be necessary
-		var formsOfAddress = new RegExp(`^@?forgetmenot|^<@?${botKeychain.bot_user_id}>`,'i');
+		var formsOfAddress = new RegExp(`^@?forgetmenot,?\s*|^<@?${botKeychain.bot_user_id}>,?\s*`,'i');
 		if(message.type === "message" && formsOfAddress.test(message.text)) {
 			console.log("Handing this bad boy off to 😈 CHATBOT")
 			var payload = message;
 
 			// Remove reference to @forgetmenot
-			payload.text = payload.text.replace(/^@?forgetmenot,?\s*|^<@?${botKeychain.bot_user_id}>,?\s*/i, '')
+			payload.text = payload.text.replace(formsOfAddress, '')
 
 			// Should send data to Chatbot and return messages for emitting
 			// TODO: Also support postEphemeral(id, user, text, params)
