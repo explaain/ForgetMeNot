@@ -147,16 +147,30 @@ function initateSlackBot(botKeychain) {
 			// TODO: Also support postEphemeral(id, user, text, params)
 			handleMessage(
 				payload,
-				(text, options = {}) => bot.postMessage(message.channel, text, options)
+				(response, options) => bot.postMessage(message.channel, response.message.text, options)
 			)
 		}
 	})
+
+	// Listen for aggressive webhooks from API
+	chatbotController.acceptClientMessageFunction(
+		receiveMessagesToSend,
+		(response, options) {
+			bot.postMessage(response.recipient.id, response.message.text, options)
+		}
+	)
 }
 
-// If we want to use the Event API instead...
-exports.handleEvent = function(req, res) {
-	console.log("New Slack event:",req.body)
-	// return res.send(req.body.challenge); // Should only be needed once, to confirm URL
+const receiveMessagesToSend = function(response, emitter) {
+	const d = Q.defer()
+	handleResponseGroup(response)
+	.then(function(res) {
+		d.resolve(res)
+	}).catch(function(e) {
+		logger.error(e)
+		d.reject(e)
+	})
+	return d.promise
 }
 
 handleMessage = function(payload, emitter) {
@@ -248,8 +262,8 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 		// console.log("I'm about to echo ==>", thisResponse, params)
 		// TODO: Setup buttons
 		// bot.postMessage
-		emitter(thisResponse.message.text, params)
 		.then(x => d.resolve("200 Emitted response",x))
+		emitter(thisResponse, params)
 		.catch(err => d.reject("ERROR Emitted response",err))
 	}, delay);
 	return d.promise;
