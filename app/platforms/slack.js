@@ -155,14 +155,15 @@ function transformMessage(message) {
 
 	// Respond only when the bot's involved
 	// But not if it's the bot posting.
-	if(!message.formsOfAddress.test(message.text) || message.bot_id) return false;
-	message.usable = true;
+	if((message.text && !message.formsOfAddress.test(message.text)) || message.bot_id) return false;
 
 	console.log("🔧🔧⚙️🔬 Transforming an API-able message: ", message)
 
+	// Approve it for API sending
+	message.usable = true;
+
 	// Remove reference to @forgetmenot
-	// console.log("!!!🔧🔧⚙️🔬!!! Gonna alter message.text", message.text);
-	message.text = message.text.replace(message.formsOfAddress, '')
+	if(message.text) message.text = message.text.replace(message.formsOfAddress, '')
 
 	return message;
 }
@@ -170,16 +171,36 @@ function transformMessage(message) {
 function handleMessage(message, emitter) {
 	// Transform into Facebook format.
 	var messageFormatted = { entry: [ { messaging: [ {
-		sender: { id: message.sender },
-		message: { text: message.text }
+		sender: { id: message.channel },
+		message: { }
 	} ] } ] }
+
+	if(message.text) {
+		messageFormatted.entry[0].messaging[0].message.text = message.text;
+	} else
+	if(message.quick_reply) {
+		messageFormatted.entry[0].messaging[0].message.quick_reply = {
+			payload: message.quick_reply
+		}
+	} else
+	if(message.file) {
+		messageFormatted.entry[0].messaging[0].message.attachment = {
+			attachment_id: message.file.id,
+			type: message.file.filetype,
+			payload: {
+				url: message.file.permalink,
+				'is_reusable': true
+			}
+		}
+	}
+
+	logger.log("TO API==>", JSON.stringify(messageFormatted, null, 2))
 
   logger.trace()
   // logger.log(req)
   chatbotController.handleMessage(messageFormatted)
   .then(function(apiResult) {
-    logger.log("TO API==>", JSON.stringify(messageFormatted, null, 2))
-    logger.log("FROM API==>", JSON.stringify(apiResult.messageData, null, 2))
+    logger.log("FROM API==>", apiResult && apiResult.messageData ? JSON.stringify(apiResult.messageData, null, 2) : "No response text.")
 		// Message formatting DOCS: https://api.slack.com/docs/messages
     return handleResponseGroup(emitter, apiResult)
   })
@@ -219,7 +240,7 @@ function prepareAndSendResponses(emitter, responseData, delay) {
   logger.trace()
 	Q.allSettled(
 		responseDataArray.map(function(thisResponse, i, array) {
-      if (thisResponse.message.attachment) i = Math.max(i-1, 0) // Stop attachements from delaying before sending
+      if (thisResponse.message && thisResponse.message.attachment) i = Math.max(i-1, 0) // Stop attachements from delaying before sending
 			return sendResponseAfterDelay(emitter, thisResponse, delay + i*2000);
 		})
 	).then(function(results) {
@@ -297,7 +318,7 @@ exports.quickreply = function(req, res) {
 
 	res.json(noBtnMessage);
 
-	// 2a. Post reply to slack on behalf of user
+	// 2. Post reply to slack on behalf of user
 	emitter().emit(
 		// reaction.channel.id.charAt(0) === 'D' ? reaction.user.id : reaction.channel.id, // Identify by user OR by group
 		// Actually, previous line should be resolved by callback_id specified in the initial message
@@ -307,17 +328,15 @@ exports.quickreply = function(req, res) {
 			as_user: false,
 			username: alias
 		}
-	);
-
-	// 2b. Post the payload to the API on behalf of user
-	handleMessage({
-			sender: reaction.callback_id,
-			text: reaction.actions[0].name // the payload string
-		},
-		emitter({recipient: reaction.callback_id})
-	)
-
-	// 3. API responds (or whatever)
+	).then(() => {
+		// 3. Post the payload to the API on behalf of user
+		handleMessage({
+				channel: reaction.callback_id, // converts to sender at handleMessage()
+				quick_reply: reaction.actions[0].name // the payload string
+			},
+			emitter({recipient: reaction.callback_id})
+		)
+	}).catch((e)=>logger.log(e))
 }
 
 exports.dropdown = function() {
