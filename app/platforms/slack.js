@@ -83,40 +83,67 @@ function initateSlackBot(botKeychain) {
 	});
 
 	bot.on('message', (message) => {
-		logger.log("Slack event:", message)
+		// logger.log("Slack event:", message)
 
-		// For now, just listen to direct addresses
-		// TODO: In private messages, no address should be necessary
-		var formsOfAddress = new RegExp(`^@?forgetmenot,?\s*|^<@?${botKeychain.bot_user_id}>,?\s*`,'i');
-		if((message.type === "message" && formsOfAddress.test(message.text)) || message.bot_id) {
-			var payload = message;
-			// Remove reference to @forgetmenot
-			payload.text = payload.text.replace(formsOfAddress, '')
+		// Only listen for text messages... for now.
+		if(message.type !== "message") return false;
 
-			if(payload.subtype == 'bot_message') {
-				console.log("Bot message, check for alias.");
-				if(aliasDirectory[payload.username] !== undefined) {
-					console.log("Bot alias:", payload.username, aliasDirectory[payload.username])
-					payload.user = aliasDirectory[payload.username] // Bot posted on behalf of this user
-				} else {
-					console.log("No such alias. Ignoring this msg.")
-					return false; // Gendit bot post, ABORT
-				}
-			}
-			console.log("Handing this bad boy off to 😈 CHATBOT")
-
-			// Should send data to Chatbot and return messages for emitting
-			// TODO: Also support postEphemeral(id, user, text, params)
-			// @emitter
-			rtm.sendTyping(message.channel)
-			handleMessage(payload, emmiter({recipient:message.channel}))
+		switch (message.channel.charAt(0)) {
+			// it's a public channel
+			case "C":
+			// it's either a private channel or multi-person DM
+			case "G":
+				var formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
+				break;
+			// it's a DM with the user
+			case "D":
+				var formsOfAddress = new RegExp(``,'i'); // listen to all messages
 		}
+
+		// Respond only when the bot's involved
+		if(!formsOfAddress.test(message.text) && !message.bot_id) return false;
+
+		// Check for bot-as-user messages
+		if(message.subtype == 'bot_message' || message.bot_id) {
+			// console.log("Bot message, check for alias.");
+			if(aliasDirectory[message.username] !== undefined) {
+				console.log("😈 Bot speaking on behalf of:", message.username, aliasDirectory[message.username])
+				message.user = aliasDirectory[message.username] // Bot posted on behalf of this user
+			} else {
+				// console.log("No such alias. Ignoring this msg.")
+				return false; // Gendit bot post, ABORT
+			}
+		}
+
+		// Remove reference to @forgetmenot
+		message.text = message.text.replace(formsOfAddress, '')
+		message.text = message.text.trim();
+
+		console.log("😈 CHATBOT listens to:", message)
+
+		// Should send data to Chatbot and return messages for emitting
+		// TODO: Support postEphemeral(id, user, text, params) for slash commands
+		rtm.sendTyping(message.channel)
+		handleMessage(message, emmiter({recipient:message.channel}))
 	})
+
+	/**
+	 * Posts messages flexibly. Pass this on to the Chatbot API workflow
+	 * @param {String} config.recipient required
+	 * @param {String} [config.action] optional, defaults to 'postMessage'
+	*/
+	function emmiter(config) {
+		return ({
+			// Fill recipient before send
+			recipient: config.recipient,
+			emit: (recipient, response, options) => bot[config.action || 'postMessage'](recipient, response.message.text, options)
+		})
+	}
 
 	// Listen for aggressive webhooks from API
 	chatbotController.acceptClientMessageFunction((response, emitter) => {
 		const d = Q.defer()
-		handleResponseGroup(emmiter({recipient:null}), response)
+		handleResponseGroup(emmiter({recipient: null}), response)
 		.then((res) => {
 			d.resolve(res)
 		}).catch((e) => {
@@ -125,14 +152,6 @@ function initateSlackBot(botKeychain) {
 		})
 		return d.promise
 	})
-
-	function emmiter(config) {
-		return ({
-			// Fill recipient before send
-			recipient: config.recipient,
-			emit: (recipient, response, options) => bot.postMessage(recipient, response.message.text, options)
-		})
-	}
 }
 
 function handleMessage(payload, emitter) {
@@ -247,16 +266,15 @@ exports.quickreply = function(req, res) {
 	logger.trace(exports.quickreply);
 
 	var reaction = JSON.parse(req.body.payload);
-	// logger.log(reaction);
+	logger.log("Quick reply pressed", reaction);
 
 	// So Chatbot still recognises bot-originated message as a user message
 	aliasDirectory[reaction.user.name] = reaction.user.id
 
 	// Post on behalf of the user
-	bot.postMessageToChannel(
-		reaction.channel.name,
-		reaction.actions[0].value,
-		{
+	bot.postMessage(
+		reaction.channel.id,
+		reaction.actions[0].value, {
 			as_user: false,
 			username: reaction.user.name
 		}
