@@ -91,12 +91,15 @@ function initateSlackBot(botKeychain) {
 		switch (message.channel.charAt(0)) {
 			// it's a public channel
 			case "C":
+				var message.channelType = "C";
 			// it's either a private channel or multi-person DM
 			case "G":
+				var message.channelType = "G";
 				var formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
 				break;
 			// it's a DM with the user
 			case "D":
+				var message.channelType = "D";
 				var formsOfAddress = new RegExp(``,'i'); // listen to all messages
 		}
 
