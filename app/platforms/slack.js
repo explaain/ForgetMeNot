@@ -49,6 +49,7 @@ exports.oauth = function(req, res) {
 }
 
 var bot;
+var botKeychain;
 
 // For recognising bot-emitted user responses as userId
 // Generated at page end, @method quickreply
@@ -57,24 +58,26 @@ var aliasDirectory = {
 	/* username = userId */
 }
 
-function initateSlackBot(botKeychain) {
+function initateSlackBot(thisBotKeychain) {
+	botKeychain = thisBotKeychain
+
 	logger.trace(initateSlackBot);
 
 	// create a bot
 	bot = new SlackBot({
-	    token: botKeychain.bot_access_token
+	   token: thisBotKeychain.bot_access_token
 	});
-	rtm = new RtmClient(botKeychain.bot_access_token);
+	rtm = new RtmClient(thisBotKeychain.bot_access_token);
 	rtm.start();
 
 	logger.log('New Slackbot connecting.')
 
-	bot.on('open', () => logger.log("Slackbot opened websocket.",...arguments))
-	bot.on('errror', () => logger.log("Slackbot 👺 ERR'D OUT while connecting.",...arguments))
-	bot.on('close', () => logger.log("Slackbot 👺 CLOSED a websocket.",...arguments))
+	bot.on('open', () => logger.log("Slackbot opened websocket."))
+	bot.on('errror', () => logger.log("Slackbot 👺 ERR'D OUT while connecting."))
+	bot.on('close', () => logger.log("Slackbot 👺 CLOSED a websocket."))
 
 	bot.on('start', () => {
-		logger.log('Slackbot has 🙏 connected.',...arguments)
+		logger.log('Slackbot has 🙏 connected.')
 
 		// TODO: Remove after debug
     bot.postMessageToChannel('bot-testing', `*I'm your personal mind-palace. Invite me to this channel and ask me to remember things :)*`, {
@@ -88,40 +91,12 @@ function initateSlackBot(botKeychain) {
 		// Only listen for text messages... for now.
 		if(message.type !== "message") return false;
 
-		switch (message.channel.charAt(0)) {
-			// it's a public channel
-			case "C":
-				var message.channelType = "C";
-			// it's either a private channel or multi-person DM
-			case "G":
-				var message.channelType = "G";
-				var formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
-				break;
-			// it's a DM with the user
-			case "D":
-				var message.channelType = "D";
-				var formsOfAddress = new RegExp(``,'i'); // listen to all messages
-		}
+		// * Transform the message so the bot replies to the right user/channel etc.
+		// * Get rid of unwanted addressing (e.g. @forgetmenot)
+		message = transformMessage(message);
 
-		// Respond only when the bot's involved
-		if(!formsOfAddress.test(message.text) && !message.bot_id) return false;
-
-		// Check for bot-as-user messages
-		if(message.subtype == 'bot_message' || message.bot_id) {
-			// console.log("Bot message, check for alias.");
-			if(aliasDirectory[message.username] !== undefined) {
-				console.log("😈 Bot speaking on behalf of:", message.username, aliasDirectory[message.username])
-				message.user = aliasDirectory[message.username] // Bot posted on behalf of this user
-			} else {
-				// console.log("No such alias. Ignoring this msg.")
-				return false; // Gendit bot post, ABORT
-			}
-		}
-
-		// Remove reference to @forgetmenot
-		message.text = message.text.replace(formsOfAddress, '')
-		message.text = message.text.trim();
-
+		// Gendit bot post, ABORT
+		if(!message.usable) return false;
 		console.log("😈 CHATBOT listens to:", message)
 
 		// Should send data to Chatbot and return messages for emitting
@@ -157,16 +132,72 @@ function initateSlackBot(botKeychain) {
 	})
 }
 
-function handleMessage(payload, emitter) {
+function scopeMessage(message) {
+	switch (message.channel.charAt(0)) {
+		// it's a public channel
+		case "C":
+			message.channelType = "C";
+			message.sender = message.channel; // Address the channel/group, not the user.
+			message.formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
+			break;
+		// it's either a private channel or multi-person DM
+		case "G":
+			message.channelType = "G";
+			message.sender = message.channel; // Address the channel/group, not the user.
+			message.formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
+			break;
+		// it's a DM with the user
+		case "D":
+			message.channelType = "D";
+			message.sender = message.user;
+			message.formsOfAddress = new RegExp(``,'i'); // listen to all messages
+			break;
+	}
+
+	return message;
+}
+
+function transformMessage(message) {
+
+	console.log("🔧🔧⚙️🔬 Transforming message", message)
+
+	message = scopeMessage(message);
+
+	// Respond only when the bot's involved
+	if(!message.formsOfAddress.test(message.text) && !message.bot_id) return false;
+
+	message.usable = true;
+
+	// Check for bot-as-user messages
+	if(message.subtype == 'bot_message' || message.bot_id) {
+		// console.log("Bot message, check for alias.");
+		if(aliasDirectory[message.username] !== undefined) {
+			console.log("😈 Bot speaking on behalf of:", message.username, aliasDirectory[message.username])
+			message.user = aliasDirectory[message.username] // Bot posted on behalf of this user
+		} else {
+			// console.log("No such alias. Ignoring this msg.")
+			message.usable = false;
+		}
+	}
+
+	// Remove reference to @forgetmenot
+	console.log("!!!🔧🔧⚙️🔬!!! Gonna alter message.text", message.text);
+	message.text = message.text.replace(message.formsOfAddress, '')
+	message.text = message.text.trim();
+
+	return message;
+}
+
+function handleMessage(message, emitter) {
 	// Transform into Facebook format.
-	var payloadFormatted = { entry: [ { messaging: [ {
-		sender: { id: payload.user },
-		message: { text: payload.text }
+	var messageFormatted = { entry: [ { messaging: [ {
+		sender: { id: message.sender },
+		message: { text: message.text }
 	} ] } ] }
 
   logger.trace()
   // logger.log(req)
-  chatbotController.handleMessage(payloadFormatted)
+  chatbotController.handleMessage(messageFormatted)
   .then(function(apiResult) {
     logger.log(JSON.stringify(apiResult, null, 2))
 		// Message formatting DOCS: https://api.slack.com/docs/messages
@@ -231,7 +262,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 			{
 				"text": "Quick-reply",
 				"fallback": "Oops, you can't quick-reply",
-				"callback_id": thisResponse.recipient.id,
+				"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of
 	      "color": "#FED33C",
         "attachment_type": "default",
 				"actions": []
@@ -269,17 +300,24 @@ exports.quickreply = function(req, res) {
 	logger.trace(exports.quickreply);
 
 	var reaction = JSON.parse(req.body.payload);
+
 	logger.log("Quick reply pressed", reaction);
 
-	// So Chatbot still recognises bot-originated message as a user message
-	aliasDirectory[reaction.user.name] = reaction.user.id
+	// Define this specific message sender as part of the conversational chain
+	// Even if the bot itself is speaking on behalf of the user
+	// var alias = `On behalf of ${reaction.channel.id.charAt(0) === 'D' ? reaction.user.name : "#"+reaction.channel.name}`
+	var alias = `On behalf of ${reaction.user.name}` // Maybe say when you're reacting for the group?
+	aliasDirectory[alias] = reaction.callback_id
+	// console.log("Bot posting as", alias, aliasDirectory[alias]);
 
 	// Post on behalf of the user
 	bot.postMessage(
-		reaction.channel.id,
+		// reaction.channel.id.charAt(0) === 'D' ? reaction.user.id : reaction.channel.id, // Identify by user OR by group
+		// Actually, previous line should be resolved by callback_id specified in the initial message
+		reaction.callback_id,
 		reaction.actions[0].value, {
 			as_user: false,
-			username: reaction.user.name
+			username: alias
 		}
 	).then(()=>{
 		// Remove buttons
