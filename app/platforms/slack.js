@@ -155,13 +155,13 @@ function initateSlackBot(botKeychain) {
 	// Listen for aggressive webhooks from API
 	chatbotController.acceptClientMessageFunction(
 		receiveMessagesToSend,
-		(response, options) {
+		(response, options) => {
 			bot.postMessage(response.recipient.id, response.message.text, options)
 		}
 	)
 }
 
-const receiveMessagesToSend = function(response, emitter) {
+function receiveMessagesToSend(response, emitter) {
 	const d = Q.defer()
 	handleResponseGroup(response)
 	.then(function(res) {
@@ -173,7 +173,7 @@ const receiveMessagesToSend = function(response, emitter) {
 	return d.promise
 }
 
-handleMessage = function(payload, emitter) {
+function handleMessage(payload, emitter) {
 	// Transform into Facebook format.
 	var payloadFormatted = { entry: [ { messaging: [ {
 		sender: { id: payload.user },
@@ -193,7 +193,7 @@ handleMessage = function(payload, emitter) {
   })
 }
 
-const handleResponseGroup = function(emitter, response) {
+function handleResponseGroup(emitter, response) {
   const d = Q.defer();
   const promises = []
   if (response && response.messageData) {
@@ -240,50 +240,98 @@ function prepareAndSendResponses(emitter, responseData, delay) {
 function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	logger.trace(sendResponseAfterDelay);
 	const d = Q.defer();
+	// TODO: Slackbot should start 'typing'
 	var params = {}
-	if(thisResponse.quick_replies && thisResponse.quick_replies.length > 0) {
+	if(thisResponse.message.quick_replies && thisResponse.message.quick_replies.length > 0) {
 		params.attachments = [
 			{
+				"text": "Quick-reply",
+				"fallback": "Oops, you can't quick-reply",
+				"callback_id": thisResponse.recipient.id,
+	      "color": "#FED33C",
         "attachment_type": "default",
-        "actions": []
+				"actions": []
       }
-		]
-		thisResponse.quick_replies.forEach(reply => {
-			params.attachments.push({
+		];
+
+		thisResponse.message.quick_replies.forEach(reply => {
+			params.attachments[0].actions.push({
 				"type": "button",
-				"name": reply.title,
+				"name": "quickreply",
 				"text": reply.title,
-				"value": reply.payload
+				"value": reply.title
 			})
 		})
 	}
 	// if (!thisResponse.sender_action) sendSenderAction(thisResponse.recipient.id, 'typing_on');
 	setTimeout(function() {
-		// console.log("I'm about to echo ==>", thisResponse, params)
+		console.log("I'm about to echo ==>", thisResponse.message.text)
+		if(params.attachments) console.log("Buttons should attach", params.attachments[0].actions)
 		// TODO: Setup buttons
 		// bot.postMessage
-		.then(x => d.resolve("200 Emitted response",x))
 		emitter(thisResponse, params)
+		.then(x => {
+			// TODO: Slackbot should stop typing
+			d.resolve("200 Emitted response",x)
+		})
 		.catch(err => d.reject("ERROR Emitted response",err))
 	}, delay);
 	return d.promise;
 }
 
-// function sendSenderAction(recipientId, sender_action) {
-// 	logger.trace(sendSenderAction);
-// 	const d = Q.defer()
-//   var responseData = {
-//     recipient: {
-//       id: recipientId
-//     },
-//     sender_action: sender_action
-//   };
-// 	callSendAPI(responseData, properties.facebook_message_endpoint)
-// 	.then(function(body) {
-// 		d.resolve(body)
-// 	}).catch(function(err) {
-//     logger.error(err)
-// 		d.reject(err)
-// 	});
-// 	return d.promise
-// }
+exports.quickreply = function(req, res) {
+	res.sendStatus(200);
+
+	logger.trace(exports.quickreply);
+
+	var reaction = JSON.parse(req.body.payload);
+	// logger.log(reaction);
+
+	// Post on behalf of the user
+	bot.postMessageToChannel(
+		reaction.channel.name,
+		reaction.actions[0].value,
+		{
+			as_user: false,
+			username: reaction.user.name
+			// id: reactions.user.id
+			// Not the real userId, so API won't recognise it as such :/
+			// Solution: pair username with ID beforehand, compare after.
+		}
+	)
+	// Post as user
+	// req.body.payload
+	/* {
+  "actions": [
+    {
+      "name": "recommend",
+      "value": "yes",
+      "type": "button"
+    }
+  ],
+  "callback_id": "comic_1234_xyz",
+  "team": {
+    "id": "T47563693",
+    "domain": "watermelonsugar"
+  },
+  "channel": {
+    "id": "C065W1189",
+    "name": "forgotten-works"
+  },
+  "user": {
+    "id": "U045VRZFT",
+    "name": "brautigan"
+  },
+  "action_ts": "1458170917.164398",
+  "message_ts": "1458170866.000004",
+  "attachment_id": "1",
+  "token": "xAB3yVzGS4BQ3O9FACTa8Ho4",
+  "original_message": {"text":"New comic book alert!","attachments":[{"title":"The Further Adventures of Slackbot","fields":[{"title":"Volume","value":"1","short":true},{"title":"Issue","value":"3","short":true}],"author_name":"Stanford S. Strickland","author_icon":"https://api.slack.comhttps://a.slack-edge.com/bfaba/img/api/homepage_custom_integrations-2x.png","image_url":"http://i.imgur.com/OJkaVOI.jpg?1"},{"title":"Synopsis","text":"After @episod pushed exciting changes to a devious new branch back in Issue 1, Slackbot notifies @don about an unexpected deploy..."},{"fallback":"Would you recommend it to customers?","title":"Would you recommend it to customers?","callback_id":"comic_1234_xyz","color":"#3AA3E3","attachment_type":"default","actions":[{"name":"recommend","text":"Recommend","type":"button","value":"recommend"},{"name":"no","text":"No","type":"button","value":"bad"}]}]},
+  "response_url": "https://hooks.slack.com/actions/T47563693/6204672533/x7ZLaiVMoECAW50Gw1ZYAXEM",
+  "trigger_id": "13345224609.738474920.8088930838d88f008e0"
+	} */
+}
+
+exports.dropdown = function() {
+	//
+}
