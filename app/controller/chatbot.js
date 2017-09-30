@@ -107,6 +107,21 @@ exports.fbInformation = function() {
 
 
 /* Recieve request */
+/**
+ * @param {Object} body expects {Array} body.entry[0].messaging
+	e.g. body.entry = {
+ 	messaging: [
+		 {
+			 sender: {
+				 id: sender
+			 },
+			 message: {
+				 text: message
+			 },
+		 }
+	 ]
+	}
+*/
 exports.handleMessage = function(body) {
 	logger.trace('handleMessage')
 	const d = Q.defer()
@@ -190,7 +205,7 @@ exports.handleMessage = function(body) {
 					}
 				}
 			}
-			
+
 			if (!firstPromise || !firstPromise.then) {
 				const message = createTextMessage(sender, 'Sorry, I didn\'t understand that!') // Should use GiveUp function
 				firstPromise = createMessagePromise({sender: sender}, message)
