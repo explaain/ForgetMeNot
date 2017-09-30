@@ -109,20 +109,28 @@ exports.oauth = function(req, res) {
 
 var bot;
 
+// For recognising bot-emitted user responses as userId
+// Generated at page end, @method quickreply
+var aliasDirectory = {
+	/* name = userId */
+}
+
 function initateSlackBot(botKeychain) {
+	logger.trace(initateSlackBot);
+
 	// create a bot
 	bot = new SlackBot({
 	    token: botKeychain.bot_access_token
 	});
 
-	console.log('New Slackbot connecting.')
+	logger.log('New Slackbot connecting.')
 
-	bot.on('open', () => console.log("Slackbot opened websocket.",...arguments))
-	bot.on('errror', () => console.log("Slackbot 👺 ERR'D OUT while connecting.",...arguments))
-	bot.on('close', () => console.log("Slackbot 👺 CLOSED a websocket.",...arguments))
+	bot.on('open', () => logger.log("Slackbot opened websocket.",...arguments))
+	bot.on('errror', () => logger.log("Slackbot 👺 ERR'D OUT while connecting.",...arguments))
+	bot.on('close', () => logger.log("Slackbot 👺 CLOSED a websocket.",...arguments))
 
 	bot.on('start', () => {
-		console.log('Slackbot has 🙏 connected.',...arguments)
+		logger.log('Slackbot has 🙏 connected.',...arguments)
 
 		// TODO: Remove after debug
     bot.postMessageToChannel('bot-testing', `*I'm your personal mind-palace. Invite me to this channel and ask me to remember things :)*`, {
@@ -131,17 +139,27 @@ function initateSlackBot(botKeychain) {
 	});
 
 	bot.on('message', (message) => {
-		console.log("Slack event:", message)
+		logger.log("Slack event:", message)
 
 		// For now, just listen to direct addresses
 		// TODO: In private messages, no address should be necessary
 		var formsOfAddress = new RegExp(`^@?forgetmenot,?\s*|^<@?${botKeychain.bot_user_id}>,?\s*`,'i');
-		if(message.type === "message" && formsOfAddress.test(message.text)) {
-			console.log("Handing this bad boy off to 😈 CHATBOT")
+		if((message.type === "message" && formsOfAddress.test(message.text)) || message.bot_id) {
 			var payload = message;
-
 			// Remove reference to @forgetmenot
 			payload.text = payload.text.replace(formsOfAddress, '')
+
+			if(payload.subtype == 'bot_message') {
+				console.log("Bot message, check for alias.");
+				if(aliasDirectory[payload.username] !== undefined) {
+					console.log("Bot alias:", payload.username, aliasDirectory[payload.username])
+					payload.user = aliasDirectory[payload.username] // Bot posted on behalf of this user
+				} else {
+					console.log("No such alias. Ignoring this msg.")
+					return false; // Gendit bot post, ABORT
+				}
+			}
+			console.log("Handing this bad boy off to 😈 CHATBOT")
 
 			// Should send data to Chatbot and return messages for emitting
 			// TODO: Also support postEphemeral(id, user, text, params)
@@ -280,12 +298,15 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 }
 
 exports.quickreply = function(req, res) {
-	res.sendStatus(200);
+	res.status(200).send();
 
 	logger.trace(exports.quickreply);
 
 	var reaction = JSON.parse(req.body.payload);
 	// logger.log(reaction);
+
+	// So Chatbot still recognises bot-originated message as a user message
+	aliasDirectory[reaction.user.name] = reaction.user.id
 
 	// Post on behalf of the user
 	bot.postMessageToChannel(
@@ -294,11 +315,31 @@ exports.quickreply = function(req, res) {
 		{
 			as_user: false,
 			username: reaction.user.name
-			// id: reactions.user.id
-			// Not the real userId, so API won't recognise it as such :/
-			// Solution: pair username with ID beforehand, compare after.
 		}
-	)
+	).then(()=>{
+		// Remove buttons
+		bot.updateMessage(
+			reaction.channel.id,
+			reaction.message_ts,
+			reaction.original_message.text,
+			JSON.stringify({attachments:[{actions:"nothing"}]})
+		)
+		var noBtnMessage = reaction.original_message
+		noBtnMessage.attachments = null
+		request({
+			method: "POST",
+			url: reaction.response_url,
+			body: noBtnMessage,
+			headers: {
+				Authorization: reaction.token,
+		   'contentType': 'application/json',
+			}
+		})
+		.then((r)=>logger.log("Updated msg",r))
+		.catch(e=>logger.log(e))
+	})
+	.catch(e=>logger.log(e))
+
 	// Post as user
 	// req.body.payload
 	/* {
