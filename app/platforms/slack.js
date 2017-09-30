@@ -51,13 +51,6 @@ exports.oauth = function(req, res) {
 var bot;
 var botKeychain;
 
-// For recognising bot-emitted user responses as userId
-// Generated at page end, @method quickreply
-// TODO: Ensure this is scoped to specific workspaces / team lists
-var aliasDirectory = {
-	/* username = userId */
-}
-
 function initateSlackBot(thisBotKeychain) {
 	botKeychain = thisBotKeychain
 
@@ -102,35 +95,32 @@ function initateSlackBot(thisBotKeychain) {
 		// Should send data to Chatbot and return messages for emitting
 		// TODO: Support postEphemeral(id, user, text, params) for slash commands
 		rtm.sendTyping(message.channel)
-		handleMessage(message, emmiter({recipient:message.channel}))
-	})
-
-	/**
-	 * Posts messages flexibly. Pass this on to the Chatbot API workflow
-	 * @param {String} config.recipient required
-	 * @param {String} [config.action] optional, defaults to 'postMessage'
-	*/
-	function emmiter(config) {
-		return ({
-			// Fill recipient before send
-			recipient: config.recipient,
-			emit: (recipient, response, options) => bot[config.action || 'postMessage'](recipient, response.message.text, options)
-		})
-	}
-
-	// Listen for aggressive webhooks from API
-	chatbotController.acceptClientMessageFunction((response, emitter) => {
-		const d = Q.defer()
-		handleResponseGroup(emmiter({recipient: null}), response)
-		.then((res) => {
-			d.resolve(res)
-		}).catch((e) => {
-			logger.error(e)
-			d.reject(e)
-		})
-		return d.promise
+		handleMessage(message, emitter({recipient:message.channel}))
 	})
 }
+
+/**
+ * Posts messages flexibly. Pass this on to the Chatbot API workflow
+ * @param {String} config.recipient required
+ * @param {String} [config.action] optional, defaults to 'postMessage'
+*/
+function emitter(config = {}) { return ({
+	// Fill recipient before send
+	recipient: config.recipient || null,
+	emit: (recipient, text, options) => bot.postMessage(recipient, text, options)
+})}
+
+chatbotController.acceptClientMessageFunction((response, emitter) => {
+	const d = Q.defer()
+	handleResponseGroup(emitter(), response)
+	.then((res) => {
+		d.resolve(res)
+	}).catch((e) => {
+		logger.error(e)
+		d.reject(e)
+	})
+	return d.promise
+})
 
 function scopeMessage(message) {
 	switch (message.channel.charAt(0)) {
@@ -158,32 +148,21 @@ function scopeMessage(message) {
 }
 
 function transformMessage(message) {
-
-	console.log("🔧🔧⚙️🔬 Transforming message", message)
+	// DMs have a slightly different format.
+	if(message.message) Object.assign(message, message.message)
 
 	message = scopeMessage(message);
 
 	// Respond only when the bot's involved
-	if(!message.formsOfAddress.test(message.text) && !message.bot_id) return false;
-
+	// But not if it's the bot posting.
+	if(!message.formsOfAddress.test(message.text) || message.bot_id) return false;
 	message.usable = true;
 
-	// Check for bot-as-user messages
-	if(message.subtype == 'bot_message' || message.bot_id) {
-		// console.log("Bot message, check for alias.");
-		if(aliasDirectory[message.username] !== undefined) {
-			console.log("😈 Bot speaking on behalf of:", message.username, aliasDirectory[message.username])
-			message.user = aliasDirectory[message.username] // Bot posted on behalf of this user
-		} else {
-			// console.log("No such alias. Ignoring this msg.")
-			message.usable = false;
-		}
-	}
+	console.log("🔧🔧⚙️🔬 Transforming an API-able message: ", message)
 
 	// Remove reference to @forgetmenot
-	console.log("!!!🔧🔧⚙️🔬!!! Gonna alter message.text", message.text);
+	// console.log("!!!🔧🔧⚙️🔬!!! Gonna alter message.text", message.text);
 	message.text = message.text.replace(message.formsOfAddress, '')
-	message.text = message.text.trim();
 
 	return message;
 }
@@ -199,7 +178,8 @@ function handleMessage(message, emitter) {
   // logger.log(req)
   chatbotController.handleMessage(messageFormatted)
   .then(function(apiResult) {
-    logger.log(JSON.stringify(apiResult, null, 2))
+    logger.log("TO API==>", JSON.stringify(messageFormatted, null, 2))
+    logger.log("FROM API==>", JSON.stringify(apiResult.messageData, null, 2))
 		// Message formatting DOCS: https://api.slack.com/docs/messages
     return handleResponseGroup(emitter, apiResult)
   })
@@ -262,7 +242,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 			{
 				"text": "Quick-reply",
 				"fallback": "Oops, you can't quick-reply",
-				"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of
+				"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
 	      "color": "#FED33C",
         "attachment_type": "default",
 				"actions": []
@@ -272,7 +252,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 		thisResponse.message.quick_replies.forEach(reply => {
 			params.attachments[0].actions.push({
 				"type": "button",
-				"name": "quickreply",
+				"name": reply.payload,
 				"text": reply.title,
 				"value": reply.title
 			})
@@ -280,13 +260,12 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	}
 	// if (!thisResponse.sender_action) sendSenderAction(thisResponse.recipient.id, 'typing_on');
 	setTimeout(function() {
-		console.log("I'm about to echo ==>", thisResponse.message.text)
-		if(params.attachments) console.log("Buttons should attach", params.attachments[0].actions)
+		// if(params.attachments) console.log("Buttons should attach", params.attachments[0].actions)
 
 		// For push-reminders and other messages with no Slack-side designated recipient
 		emitter.recipient = emitter.recipient || thisResponse.recipient.id;
 
-		emitter.emit(emitter.recipient, thisResponse, params)
+		emitter.emit(emitter.recipient, thisResponse.message.text, params)
 		.then(x => {
 			// TODO: Slackbot should stop typing
 			d.resolve("200 Emitted response",x)
@@ -296,6 +275,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	return d.promise;
 }
 
+// For webhooks
 exports.quickreply = function(req, res) {
 	logger.trace(exports.quickreply);
 
@@ -306,29 +286,38 @@ exports.quickreply = function(req, res) {
 	// Define this specific message sender as part of the conversational chain
 	// Even if the bot itself is speaking on behalf of the user
 	// var alias = `On behalf of ${reaction.channel.id.charAt(0) === 'D' ? reaction.user.name : "#"+reaction.channel.name}`
-	var alias = `On behalf of ${reaction.user.name}` // Maybe say when you're reacting for the group?
-	aliasDirectory[alias] = reaction.callback_id
+	var alias = `${reaction.user.name} via ForgetMeNot` // Maybe say when you're reacting for the group?
 	// console.log("Bot posting as", alias, aliasDirectory[alias]);
 
-	// Post on behalf of the user
-	bot.postMessage(
+	// 1. Remove the UI buttons
+	var noBtnMessage = reaction.original_message
+	noBtnMessage.attachments = {}
+	noBtnMessage.ts = reaction.message_ts;
+	noBtnMessage.channel = reaction.channel.id;
+
+	res.json(noBtnMessage);
+
+	// 2a. Post reply to slack on behalf of user
+	emitter().emit(
 		// reaction.channel.id.charAt(0) === 'D' ? reaction.user.id : reaction.channel.id, // Identify by user OR by group
 		// Actually, previous line should be resolved by callback_id specified in the initial message
 		reaction.callback_id,
-		reaction.actions[0].value, {
+		reaction.actions[0].value,
+		{
 			as_user: false,
 			username: alias
 		}
-	).then(()=>{
-		// Remove buttons
-		var noBtnMessage = reaction.original_message
-		noBtnMessage.attachments = {}
-		noBtnMessage.ts = reaction.message_ts;
-		noBtnMessage.channel = reaction.channel.id;
+	);
 
-		res.json(noBtnMessage);
-	})
-	.catch(e=>logger.log(e))
+	// 2b. Post the payload to the API on behalf of user
+	handleMessage({
+			sender: reaction.callback_id,
+			text: reaction.actions[0].name // the payload string
+		},
+		emitter({recipient: reaction.callback_id})
+	)
+
+	// 3. API responds (or whatever)
 }
 
 exports.dropdown = function() {
