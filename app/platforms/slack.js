@@ -13,107 +13,48 @@ const tracer = require('tracer')
 const logger = tracer.colorConsole({level: 'log'});
 // tracer.setLevel('error');
 
-// Slackbot DOCS: https://api.slack.com/bot-users
-
-/*
-
-	1. Setting up back-n-forth comms
-
-	* The primary way bot users interact with people on a given workspace is by connecting to the Real Time Messaging API (RTM API for short) and opening up a websocket connection with Slack.
-	** DOCS: https://api.slack.com/rtm
-
-	* (The Events API is an alternative way to receive and respond to events as a bot user contained within a Slack App. Instead of connecting over a websocket, you subscribe to specific events and messages and Slack sends them to your server.)
-
-*/
-
-/*
-
-	2. Sending messages to individuals
-
-	* chat.postEphemeral method allows a bot user to post a complex message visible only to a specific user and context.
-	** DOCS: https://api.slack.com/methods/chat.postEphemeral
-
-	* The bot user can also use the Web API to add emoji reactions to messages, upload files, pin and star messages, and generally behave like any other user on the workspace.
-
-*/
-
-/*
-
-	3. Channel-wide comms
-
-	* Web API method chat.postMessage. Set as_user to true to send messages as your bot with its username and profile image.
-
-*/
-
-// Dev
+// Dev bootstrap
 initateSlackBot({
 	bot_access_token: "xoxb-248382524992-erAIp1lU41jRmlS4fuxWHXwW",
 	bot_user_id: "U7AB8FEV6"
 });
 
 exports.oauth = function(req, res) {
-	// Lifted from https://api.slack.com/tutorials/tunneling-with-ngrok
-
 	// When a user authorizes an app, a code query parameter is passed on the oAuth endpoint. If that code is not there, we respond with an error message
-    if (!req.query.code) {
-        res.status(500);
-        res.send({"Error": "Looks like we're not getting code."});
-        console.log("Looks like we're not getting code.");
-    } else {
-        // If it's there...
+  if (!req.query.code) {
+      res.status(500);
+      res.send({"Error": "Looks like we're not getting code."});
+      console.log("Looks like we're not getting code.");
+  } else {
+    // If it's there...
 
-        // We'll do a GET call to Slack's `oauth.access` endpoint, passing our app's client ID, client secret, and the code we just got as query parameters.
-        request({
-            url: 'https://slack.com/api/oauth.access', //URL to hit
-            qs: {code: req.query.code, client_id: properties.slack_client_id, client_secret: properties.slack_client_secret}, //Query string data
-            method: 'GET', //Specify the method
-        }, function (error, response, body) {
-            if (error) {
-                console.log(error);
-            } else {
-								var slackKeychain = JSON.parse(body)
-								console.log("🤓 Bot was authorised", slackKeychain)
-                res.json(slackKeychain);
+    // We'll do a GET call to Slack's `oauth.access` endpoint, passing our app's client ID, client secret, and the code we just got as query parameters.
+    request({
+      url: 'https://slack.com/api/oauth.access', //URL to hit
+      qs: {code: req.query.code, client_id: properties.slack_client_id, client_secret: properties.slack_client_secret}, //Query string data
+      method: 'GET', //Specify the method
+    }, function (error, response, body) {
+      if (error) {
+        console.log(error);
+      } else {
+				var slackKeychain = JSON.parse(body)
+				console.log("🤓 Bot was authorised", slackKeychain)
+        res.json(slackKeychain);
 
-								// TODO: Store this token in an encrypted DB so we can bootstrap bots after server restart
-								initateSlackBot(slackKeychain.bot)
-
-								/*
-								TODO: Render a 'success' page
-									* that tells people how to user ForgetMeNot
-									* button to redirect them to channel
-
-								TODO: Store `body`
-									* Stash channel as a user (ish)
-									* Stash webhook and access_token
-
-								{
-								    "access_token": "xoxp-XXXXXXXX-XXXXXXXX-XXXXX",
-								    "scope": "incoming-webhook,commands,bot",
-								    "team_name": "Team Installing Your Hook",
-								    "team_id": "XXXXXXXXXX",
-								    "incoming_webhook": {
-								        "url": "https://hooks.slack.com/TXXXXX/BXXXXX/XXXXXXXXXX",
-								        "channel": "#channel-it-will-post-to",
-								        "configuration_url": "https://teamname.slack.com/services/BXXXXX"
-								    },
-								    "bot":{
-								        "bot_user_id":"UTTTTTTTTTTR",
-								        "bot_access_token":"xoxb-XXXXXXXXXXXX-TTTTTTTTTTTTTT"
-								    }
-								}
-								*/
-            }
-        })
-    }
+				// TODO: Store this token in an encrypted DB so we can bootstrap bots after server restart
+				initateSlackBot(slackKeychain.bot)
+      }
+    })
+  }
 }
 
 var bot;
 
 // For recognising bot-emitted user responses as userId
 // Generated at page end, @method quickreply
+// TODO: Ensure this is scoped to specific workspaces / team lists
 var aliasDirectory = {
-	/* name = userId */
+	/* username = userId */
 }
 
 function initateSlackBot(botKeychain) {
@@ -166,33 +107,32 @@ function initateSlackBot(botKeychain) {
 
 			// Should send data to Chatbot and return messages for emitting
 			// TODO: Also support postEphemeral(id, user, text, params)
-			handleMessage(
-				payload,
-				(response, options) => bot.postMessage(message.channel, response.message.text, options)
-			)
+			// @emitter
 			rtm.sendTyping(message.channel)
+			handleMessage(payload, emmiter({recipient:message.channel}))
 		}
 	})
 
 	// Listen for aggressive webhooks from API
-	chatbotController.acceptClientMessageFunction(
-		receiveMessagesToSend,
-		(response, options) => {
-			bot.postMessage(response.recipient.id, response.message.text, options)
-		}
-	)
-}
-
-function receiveMessagesToSend(response, emitter) {
-	const d = Q.defer()
-	handleResponseGroup(response)
-	.then(function(res) {
-		d.resolve(res)
-	}).catch(function(e) {
-		logger.error(e)
-		d.reject(e)
+	chatbotController.acceptClientMessageFunction((response, emitter) => {
+		const d = Q.defer()
+		handleResponseGroup(emmiter({recipient:null}), response)
+		.then((res) => {
+			d.resolve(res)
+		}).catch((e) => {
+			logger.error(e)
+			d.reject(e)
+		})
+		return d.promise
 	})
-	return d.promise
+
+	function emmiter(config) {
+		return ({
+			// Fill recipient before send
+			recipient: config.recipient,
+			emit: (recipient, response, options) => bot.postMessage(recipient, response.message.text, options)
+		})
+	}
 }
 
 function handleMessage(payload, emitter) {
@@ -289,9 +229,11 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	setTimeout(function() {
 		console.log("I'm about to echo ==>", thisResponse.message.text)
 		if(params.attachments) console.log("Buttons should attach", params.attachments[0].actions)
-		// TODO: Setup buttons
-		// bot.postMessage
-		emitter(thisResponse, params)
+
+		// For push-reminders and other messages with no Slack-side designated recipient
+		emitter.recipient = emitter.recipient || thisResponse.recipient.id;
+
+		emitter.emit(emitter.recipient, thisResponse, params)
 		.then(x => {
 			// TODO: Slackbot should stop typing
 			d.resolve("200 Emitted response",x)
@@ -319,6 +261,7 @@ exports.quickreply = function(req, res) {
 			username: reaction.user.name
 		}
 	).then(()=>{
+		// Remove buttons
 		var noBtnMessage = reaction.original_message
 		noBtnMessage.attachments = {}
 		noBtnMessage.ts = reaction.message_ts;
