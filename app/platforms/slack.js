@@ -169,6 +169,10 @@ function transformMessage(message) {
 }
 
 function handleMessage(message, emitter) {
+	try {
+		rtm.sendTyping(emitter.recipient);
+	} catch(e) {}
+
 	// Transform into Facebook format.
 	var messageFormatted = { entry: [ { messaging: [ {
 		sender: { id: message.channel },
@@ -214,7 +218,7 @@ function handleResponseGroup(emitter, response) {
   const promises = []
   if (response && response.messageData) {
     response.messageData.forEach(function(singleResponse) {
-      promises.push(prepareAndSendResponses(emitter, singleResponse.data, singleResponse.delay || 0))
+      promises.push(sendResponseAfterDelay(emitter, singleResponse.data, (singleResponse.delay || 0) * 1000))
     })
   }
   Q.allSettled(promises)
@@ -227,51 +231,65 @@ function handleResponseGroup(emitter, response) {
   return d.promise;
 }
 
-function prepareAndSendResponses(emitter, responseData, delay) {
-	logger.trace(prepareAndSendResponses);
-	if (responseData.json) console.log(responseData.json.message); // ???
-	const d = Q.defer();
-	const responseDataArray = (responseData.message && responseData.message.text) ? [responseData] : [false];
-  if (responseData.message.attachment) {
-    const attachmentResponseData = JSON.parse(JSON.stringify(responseData))
-    delete attachmentResponseData.message.text
-    responseDataArray.push(attachmentResponseData)
-  }
-  logger.trace()
-	Q.allSettled(
-		responseDataArray.map(function(thisResponse, i, array) {
-      if (thisResponse.message && thisResponse.message.attachment) i = Math.max(i-1, 0) // Stop attachements from delaying before sending
-			return sendResponseAfterDelay(emitter, thisResponse, delay + i*2000);
-		})
-	).then(function(results) {
-		logger.log(results)
-		d.resolve(results)
-	}).catch(function(e) {
-    logger.error(e)
-    d.reject(e)
-  })
-	return d.promise;
-}
-
 function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	logger.trace(sendResponseAfterDelay);
 	const d = Q.defer();
-	// TODO: Slackbot should start 'typing'
-	var params = {}
-	if(thisResponse.message.quick_replies && thisResponse.message.quick_replies.length > 0) {
-		params.attachments = [
-			{
-				"text": "Quick-reply",
-				"fallback": "Oops, you can't quick-reply",
+
+	// For push-reminders and other messages with no Slack-side designated recipient
+	emitter.recipient = emitter.recipient || thisResponse.recipient.id;
+	// rtm.sendTyping(emitter.recipient)
+
+	logger.log("Build response with =>", thisResponse);
+
+	var params = {
+		attachments: []
+	}
+
+	if(thisResponse.message.attachment) {
+		params.attachments.push({
+	    "attachments": [{
+        "fallback": "Here's a list of related memories.",
+        "footer": "Related reminders"
+      }]
+		})
+
+		thisResponse.message.attachment.payload.elements.forEach(memory => {
+			var memoryAttachment = {
+        "fallback": "Inspect memory",
+        "color": "#FED33C",
 				"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
-	      "color": "#FED33C",
-        "attachment_type": "default",
+        "title": memory.title,
+				"text": "",
+				"thumb_url": memory.image_url,
 				"actions": []
       }
-		];
+
+			// Seems these haven't been implemented in Chatbot.js yet
+			memory.buttons.forEach(button => {
+				memoryAttachment.actions.push({
+					"type": "button",
+					"name": button.payload,
+					"text": button.title,
+					"value": button.title
+				})
+			})
+
+			params.attachments.push(memoryAttachment)
+		})
+	}
+
+	if(thisResponse.message.quick_replies && thisResponse.message.quick_replies.length > 0) {
+		params.attachments.push({
+			"footer": "Quick actions",
+			"fallback": "Oops, you can't quick-reply",
+			"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
+      "color": "#FED33C",
+      "attachment_type": "default",
+			"actions": []
+    })
 
 		thisResponse.message.quick_replies.forEach(reply => {
-			params.attachments[0].actions.push({
+			params.attachments[params.attachments.length-1].actions.push({
 				"type": "button",
 				"name": reply.payload,
 				"text": reply.title,
@@ -282,13 +300,8 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	// if (!thisResponse.sender_action) sendSenderAction(thisResponse.recipient.id, 'typing_on');
 	setTimeout(function() {
 		// if(params.attachments) console.log("Buttons should attach", params.attachments[0].actions)
-
-		// For push-reminders and other messages with no Slack-side designated recipient
-		emitter.recipient = emitter.recipient || thisResponse.recipient.id;
-
 		emitter.emit(emitter.recipient, thisResponse.message.text, params)
 		.then(x => {
-			// TODO: Slackbot should stop typing
 			d.resolve("200 Emitted response",x)
 		})
 		.catch(err => d.reject("ERROR Emitted response",err))
