@@ -128,13 +128,13 @@ function scopeMessage(message) {
 		case "C":
 			message.channelType = "C";
 			message.sender = message.channel; // Address the channel/group, not the user.
-			message.formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
+			message.formsOfAddress = new RegExp(`<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
 			break;
 		// it's either a private channel or multi-person DM
 		case "G":
 			message.channelType = "G";
 			message.sender = message.channel; // Address the channel/group, not the user.
-			message.formsOfAddress = new RegExp(`^<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
+			message.formsOfAddress = new RegExp(`<?@?(forgetmenot|${botKeychain.bot_user_id})>?[,\s ]*`,'i');
 			break;
 		// it's a DM with the user
 		case "D":
@@ -155,6 +155,8 @@ function transformMessage(message) {
 
 	// Respond only when the bot's involved
 	// But not if it's the bot posting.
+	// logger.log("Event heard", message)
+
 	if((message.text && !message.formsOfAddress.test(message.text)) || message.bot_id) return false;
 
 	console.log("🔧🔧⚙️🔬 Transforming an API-able message: ", message)
@@ -174,35 +176,52 @@ function handleMessage(message, emitter) {
 	} catch(e) {}
 
 	// Transform into Facebook format.
-	var messageFormatted = { entry: [ { messaging: [ {
+	var messagePackage = { entry: [ { messaging: [ {
 		sender: { id: message.channel },
 		message: { }
 	} ] } ] }
 
 	if(message.text) {
-		messageFormatted.entry[0].messaging[0].message.text = message.text;
-	} else
+		messagePackage.entry[0].messaging[0].message.text = message.file && message.file.initial_comment ? message.file.initial_comment : message.text;
+		// Message, or if a file, use file comments rather than fugly long Slack strings
+	}
+
 	if(message.quick_reply) {
-		messageFormatted.entry[0].messaging[0].message.quick_reply = {
+		messagePackage.entry[0].messaging[0].message.quick_reply = {
 			payload: message.quick_reply
-		}
-	} else
-	if(message.file) {
-		messageFormatted.entry[0].messaging[0].message.attachment = {
-			attachment_id: message.file.id,
-			type: message.file.filetype,
-			payload: {
-				url: message.file.permalink,
-				'is_reusable': true
-			}
 		}
 	}
 
-	logger.log("TO API==>", JSON.stringify(messageFormatted, null, 2))
+	// Package it up, add it to the messages for API to figure out.
+	if(message.file) {
+
+		var fileTypes = {
+			jpg: "image",
+			jpeg: "image",
+			png: "image"
+		}
+		var type = fileTypes[message.file.filetype] ? fileTypes[message.file.filetype] : "fallback"
+
+		messagePackage.entry[0].messaging.push({
+			sender: { id: message.channel },
+			message: {
+				attachments: [{
+					type: type,
+					url: message.file.permalink,
+					payload: {
+						url: message.file.permalink
+					}
+				}]
+			}
+		})
+		console.log("Packaged a file")
+	}
+
+	logger.log("TO API==>", JSON.stringify(messagePackage, null, 2))
 
   logger.trace()
   // logger.log(req)
-  chatbotController.handleMessage(messageFormatted)
+  chatbotController.handleMessage(messagePackage)
   .then(function(apiResult) {
     logger.log("FROM API==>", apiResult && apiResult.messageData ? JSON.stringify(apiResult.messageData, null, 2) : "No response text.")
 		// Message formatting DOCS: https://api.slack.com/docs/messages
@@ -239,46 +258,60 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	emitter.recipient = emitter.recipient || thisResponse.recipient.id;
 	// rtm.sendTyping(emitter.recipient)
 
-	logger.log("Build response with =>", thisResponse);
-
 	var params = {
 		attachments: []
 	}
 
-	if(thisResponse.message.attachment) {
-		params.attachments.push({
-	    "attachments": [{
+	if(thisResponse.message.attachment && thisResponse.message.attachment.payload) {
+		if(thisResponse.message.attachment.payload.elements) {
+			logger.log("Displaying a list of attachments")
+
+			params.attachments.push({
         "fallback": "Here's a list of related memories.",
+				"pretext": "",
         "footer": "Related reminders"
-      }]
-		})
-
-		thisResponse.message.attachment.payload.elements.forEach(memory => {
-			var memoryAttachment = {
-        "fallback": "Inspect memory",
-        "color": "#FED33C",
-				"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
-        "title": memory.title,
-				"text": "",
-				"thumb_url": memory.image_url,
-				"actions": []
-      }
-
-			// Seems these haven't been implemented in Chatbot.js yet
-			memory.buttons.forEach(button => {
-				memoryAttachment.actions.push({
-					"type": "button",
-					"name": button.payload,
-					"text": button.title,
-					"value": button.title
-				})
 			})
 
-			params.attachments.push(memoryAttachment)
-		})
+			thisResponse.message.attachment.payload.elements.forEach(memory => {
+				var memoryAttachment = {
+	        "fallback": "Inspect memory",
+	        "color": "#FED33C",
+					"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
+	        "title": memory.title,
+					"text": "",
+					"thumb_url": memory.image_url,
+					"actions": []
+	      }
+
+				// Seems these haven't been implemented in Chatbot.js yet
+				memory.buttons.forEach(button => {
+					memoryAttachment.actions.push({
+						"type": "button",
+						"name": button.payload,
+						"text": button.title,
+						"value": button.title
+					})
+				})
+
+				params.attachments.push(memoryAttachment)
+			})
+		} else if(thisResponse.message.attachment.type == "image") {
+			// Display an attachment
+			// NB: Slack bug (https://github.com/slackhq/slack-api-docs/issues/53) where image_url doesn't show at all :/
+			logger.log("Displaying an image attachment")
+
+			params.attachments.push({
+        "fallback": "An image that's attached for your memory.",
+				"thumb_url": thisResponse.message.attachment.payload.url,
+				"text": "Attached image: "+thisResponse.message.attachment.payload.url,
+        // "footer": "Attached image"
+			})
+		}
 	}
 
 	if(thisResponse.message.quick_replies && thisResponse.message.quick_replies.length > 0) {
+		logger.log("Adding buttons");
+
 		params.attachments.push({
 			"footer": "Quick actions",
 			"fallback": "Oops, you can't quick-reply",
