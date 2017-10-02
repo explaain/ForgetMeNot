@@ -13,6 +13,5 @@ router.post('/', messengerController.handleMessage);
 
 router.get('/slack/oauth', slackController.oauth);
 router.post('/slack/quickreply', slackController.quickreply);
-router.post('/slack/dropdown', slackController.dropdown);
 
 module.exports = router;

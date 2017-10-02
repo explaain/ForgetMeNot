@@ -95,24 +95,13 @@ function initateSlackBot(thisBotKeychain) {
 		// Should send data to Chatbot and return messages for emitting
 		// TODO: Support postEphemeral(id, user, text, params) for slash commands
 		rtm.sendTyping(message.channel)
-		handleMessage(message, emitter({recipient:message.channel}))
+		handleMessage(message)
 	})
 }
 
-/**
- * Posts messages flexibly. Pass this on to the Chatbot API workflow
- * @param {String} config.recipient required
- * @param {String} [config.action] optional, defaults to 'postMessage'
-*/
-function emitter(config = {}) { return ({
-	// Fill recipient before send
-	recipient: config.recipient || null,
-	emit: (recipient, text, options) => bot.postMessage(recipient, text, options)
-})}
-
-chatbotController.acceptClientMessageFunction((response, emitter) => {
+chatbotController.acceptClientMessageFunction((response) => {
 	const d = Q.defer()
-	handleResponseGroup(emitter(), response)
+	handleResponseGroup(response)
 	.then((res) => {
 		d.resolve(res)
 	}).catch((e) => {
@@ -170,9 +159,9 @@ function transformMessage(message) {
 	return message;
 }
 
-function handleMessage(message, emitter) {
+function handleMessage(message) {
 	try {
-		rtm.sendTyping(emitter.recipient);
+		rtm.sendTyping(message.channel);
 	} catch(e) {}
 
 	// Transform into Facebook format.
@@ -225,19 +214,19 @@ function handleMessage(message, emitter) {
   .then(function(apiResult) {
     logger.log("FROM API==>", apiResult && apiResult.messageData ? JSON.stringify(apiResult.messageData, null, 2) : "No response text.")
 		// Message formatting DOCS: https://api.slack.com/docs/messages
-    return handleResponseGroup(emitter, apiResult)
+    return handleResponseGroup(apiResult)
   })
 	.catch(function(e) {
     logger.error(e);
   })
 }
 
-function handleResponseGroup(emitter, response) {
+function handleResponseGroup(response) {
   const d = Q.defer();
   const promises = []
   if (response && response.messageData) {
     response.messageData.forEach(function(singleResponse) {
-      promises.push(sendResponseAfterDelay(emitter, singleResponse.data, (singleResponse.delay || 0) * 1000))
+      promises.push(sendResponseAfterDelay(singleResponse.data, (singleResponse.delay || 0) * 1000))
     })
   }
   Q.allSettled(promises)
@@ -250,12 +239,13 @@ function handleResponseGroup(emitter, response) {
   return d.promise;
 }
 
-function sendResponseAfterDelay(emitter, thisResponse, delay) {
+function sendResponseAfterDelay(thisResponse, delay) {
 	logger.trace(sendResponseAfterDelay);
 	const d = Q.defer();
 
-	// For push-reminders and other messages with no Slack-side designated recipient
-	emitter.recipient = emitter.recipient || thisResponse.recipient.id;
+	// For push-reminders where Chatbot specifies recipient.id
+	// Otherwise, look for `channel.id` and `channel` (the format for different Slack event types vary)
+	thisResponse.recipient = thisResponse.recipient.id || thisResponse.channel.id || thisResponse.channel;
 	// rtm.sendTyping(emitter.recipient)
 
 	var params = {
@@ -276,7 +266,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 				var memoryAttachment = {
 	        "fallback": "Inspect memory",
 	        "color": "#FED33C",
-					"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
+					"callback_id": thisResponse.recipient, // Specify who the bot is going to speak on behalf of, and where.
 	        "title": memory.title,
 					"text": "",
 					"thumb_url": memory.image_url,
@@ -315,7 +305,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 		params.attachments.push({
 			"footer": "Quick actions",
 			"fallback": "Oops, you can't quick-reply",
-			"callback_id": emitter.recipient, // Specify who the bot is going to speak on behalf of, and where.
+			"callback_id": thisResponse.recipient, // Specify who the bot is going to speak on behalf of, and where.
       "color": "#FED33C",
       "attachment_type": "default",
 			"actions": []
@@ -333,7 +323,7 @@ function sendResponseAfterDelay(emitter, thisResponse, delay) {
 	// if (!thisResponse.sender_action) sendSenderAction(thisResponse.recipient.id, 'typing_on');
 	setTimeout(function() {
 		// if(params.attachments) console.log("Buttons should attach", params.attachments[0].actions)
-		emitter.emit(emitter.recipient, thisResponse.message.text, params)
+		bot.postMessage(thisResponse.recipient, thisResponse.message.text, params)
 		.then(x => {
 			d.resolve("200 Emitted response",x)
 		})
@@ -365,7 +355,7 @@ exports.quickreply = function(req, res) {
 	res.json(noBtnMessage);
 
 	// 2. Post reply to slack on behalf of user
-	emitter().emit(
+	bot.postMessage(
 		// reaction.channel.id.charAt(0) === 'D' ? reaction.user.id : reaction.channel.id, // Identify by user OR by group
 		// Actually, previous line should be resolved by callback_id specified in the initial message
 		reaction.callback_id,
@@ -379,8 +369,9 @@ exports.quickreply = function(req, res) {
 		handleMessage({
 				channel: reaction.callback_id, // converts to sender at handleMessage()
 				quick_reply: reaction.actions[0].name // the payload string
-			},
-			emitter({recipient: reaction.callback_id})
+			}
+			// emitter({recipient: reaction.callback_id})
+			// I get the feeling the Chatbot specifies the recipient.id anyway.
 		)
 	}).catch((e)=>logger.log(e))
 }
