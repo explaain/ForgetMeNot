@@ -171,8 +171,9 @@ function handleMessage(message) {
 	} ] } ] }
 
 	if(message.text) {
-		messagePackage.entry[0].messaging[0].message.text = message.file && message.file.initial_comment ? message.file.initial_comment : message.text;
+		messagePackage.entry[0].messaging[0].message.text = message.file && message.file.initial_comment ? message.file.initial_comment.comment : message.text;
 		// Message, or if a file, use file comments rather than fugly long Slack strings
+		message.text = message.text.replace(message.formsOfAddress,'');
 	}
 
 	if(message.quick_reply) {
@@ -191,6 +192,9 @@ function handleMessage(message) {
 		}
 		var type = fileTypes[message.file.filetype] ? fileTypes[message.file.filetype] : "fallback"
 
+		// NB: this is packaged as the second in a two-part message array.
+		// TODO: Have chatbot **automatically** treat this message[1]
+		//	as the attachment of the "PREVIOUS" message (i.e. message[0])
 		messagePackage.entry[0].messaging.push({
 			sender: { id: message.channel },
 			message: {
@@ -213,7 +217,6 @@ function handleMessage(message) {
   chatbotController.handleMessage(messagePackage)
   .then(function(apiResult) {
     logger.log("FROM API==>", apiResult && apiResult.messageData ? JSON.stringify(apiResult.messageData, null, 2) : "No response text.")
-		// Message formatting DOCS: https://api.slack.com/docs/messages
     return handleResponseGroup(apiResult)
   })
 	.catch(function(e) {
