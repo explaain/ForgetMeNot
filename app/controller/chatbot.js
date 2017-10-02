@@ -126,7 +126,7 @@ exports.handleMessage = function(body) {
 	logger.trace('handleMessage')
 	const d = Q.defer()
 	try {
-		body.entry[0].messaging.forEach(function(event) {
+		body.entry[0].messaging.forEach(function(event, eventIndex) {
 			sender = event.sender.id;
 			if (!C[sender]) C[sender] = {
 				lastResults: [],
@@ -195,7 +195,9 @@ exports.handleMessage = function(body) {
 					setContext(sender, 'expectingAttachment', null);
 				} else if ((attachments = event.message.attachments)) {
 					if (!attachments[0].payload.sticker_id) {
-						firstPromise = prepareAttachments({sender: sender}, attachments)
+						if(eventIndex === 0) {
+							firstPromise = prepareAttachments({sender: sender}, attachments)
+						}
 					}
 					else {
 						const p = Q.defer()
@@ -216,10 +218,21 @@ exports.handleMessage = function(body) {
 				if (res && res.memories) { //Not sure if this is the right condition?
 					setContext(sender, 'lastAction', res)
 				}
-				if (responseMessage) responseMessage.messageData.push.apply(responseMessage.messageData, onboardingCheck(sender, res.requestData.intent))
-				d.resolve(responseMessage)
-			}).then(function() {
 
+				if (responseMessage) responseMessage.messageData.push.apply(responseMessage.messageData, onboardingCheck(sender, res.requestData.intent))
+
+				d.resolve(responseMessage)
+
+			}).then(function() {
+				if(eventIndex > 0) {
+					// I.e. if attachment has been sent after another message (multipart Slack implementation for example)
+					// Then add it directly to the previous thingy
+					console.log("😈 Treating this bad boy as CORRECTION_ADD_ATTACHMENT", event)
+					var secondPromise = handleQuickReplies({ sender: sender }, { payload: "CORRECTION_ADD_ATTACHMENT" })
+					secondPromise
+					.then(asYouWere)
+					.catch(e=>logger.error(e))
+				}
 			}).catch(function(e) {
 				logger.error(e)
 				d.reject(e)
@@ -358,6 +371,7 @@ const handleQuickReplies = function(requestData, quickReply) {
 			break;
 
 		case "CORRECTION_ADD_ATTACHMENT":
+			console.log("Memory chain so far", getContext(sender, 'lastAction'))
 			const updatedMemory = getContext(sender, 'lastAction').memories[0]
 			if (getContext(sender, 'holdingAttachment')) {
 				updatedMemory.attachments = [getContext(sender, 'holdingAttachment')]
