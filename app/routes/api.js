@@ -12,8 +12,10 @@ router.post('/memories', function(req, res) {
   data.intent = 'storeMemory'
   apiController.acceptRequest(data)
   .then(function(results) {
-		res.status(200).send(result);
+		res.status(200).send(results);
 	}).catch(function(e) {
+    console.log(req.body);
+    console.error(e)
 		res.status(e.code).send(data)
 	});
 });
@@ -24,6 +26,7 @@ router.delete('/memories', function(req, res) {
 	.then(function(result) {
 		res.status(200).send(result);
 	}).catch(function(e) {
+    console.error(e)
 		res.sendStatus(400);
 	})
 });
@@ -35,8 +38,9 @@ router.post('/import', function(req, res) {
   const data = req.body;
   importController.acceptRequest(data)
   .then(function(results) {
-		res.status(200).send(result);
+		res.status(200).send(results);
 	}).catch(function(e) {
+    console.error(e)
 		res.status(e.code).send(data)
 	});
 });
