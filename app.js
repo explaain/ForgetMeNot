@@ -1,5 +1,6 @@
 // DEPENDENCIES
 var express = require('express');
+var cors = require('cors')
 var path = require('path');
 var favicon = require('serve-favicon');
 var logger = require('morgan');
@@ -17,6 +18,8 @@ var users = require('./app/routes/users');
 var webhooks = require('./app/routes/webhooks');
 
 var app = express();
+
+app.use(cors())
 
 // MongoDB database
 // mongoose.connect('mongodb://localhost/ForgetMeTest');
