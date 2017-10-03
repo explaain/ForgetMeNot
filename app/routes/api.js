@@ -1,5 +1,6 @@
 // refactored webhook code
 const apiController = require('../controller/api');
+const importController = require('../controller/import');
 
 var express = require('express');
 var router = express.Router();
@@ -28,6 +29,16 @@ router.delete('/memories', function(req, res) {
 });
 router.get('/memories', function(req, res) {
   res.status(200).send('Hi there')
+});
+
+router.post('/import', function(req, res) {
+  const data = req.body;
+  importController.acceptRequest(data)
+  .then(function(results) {
+		res.status(200).send(result);
+	}).catch(function(e) {
+		res.status(e.code).send(data)
+	});
 });
 
 module.exports = router;
