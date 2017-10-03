@@ -7,6 +7,7 @@
 //@TODO: Put GIFs back in (occasionally)
 
 
+
 process.env.TZ = 'Europe/London' // Forces the timezone to be London
 
 const api = require('../controller/api');
@@ -31,7 +32,7 @@ const apiaiApp = apiai("bdeba24b4bcf40feb24a1b8c1f86f3f3");
 // Algolia setup
 const AlgoliaSearch = require('algoliasearch');
 const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algolia_api_key,{ protocol: 'https:' });
-const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
+const AlgoliaIndex = AlgoliaClient.initIndex(process.env.ALGOLIA_INDEX);
 const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
 
 const C = {}; // C is for Context

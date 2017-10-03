@@ -25,5 +25,4 @@ exports.atlas = 'mongodb://RogerTheShrubber:Collins1@forget-me-not-development-s
 //Algolia
 exports.algolia_api_key = '1a865896c07d9c08f3e2f14736e840bf';
 exports.algolia_app_id = 'I2VKMNNAXI';
-exports.algolia_index = 'ForgetMeNot_Context';
 exports.algolia_users_index = 'ForgetMeNot_Users';

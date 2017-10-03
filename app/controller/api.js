@@ -8,6 +8,7 @@
 //TODO: account for API.ai grabbing both trigger-time and trigger-date
 
 
+
 const request = require('request');
 const Q = require("q");
 const emoji = require('moji-translate');
@@ -25,7 +26,7 @@ const logger = tracer.colorConsole({level: 'info'});
 // Algolia setup
 const AlgoliaSearch = require('algoliasearch');
 const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algolia_api_key,{ protocol: 'https:' });
-const AlgoliaIndex = AlgoliaClient.initIndex(properties.algolia_index);
+const AlgoliaIndex = AlgoliaClient.initIndex(process.env.ALGOLIA_INDEX);
 const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
 
 // Cloudinary setup
@@ -594,7 +595,7 @@ const createUserAccount = function(userData) {
   	// Generate Secure API token using this value
   	const params = {
   		filters: 'userID:' + userData.objectID + ' OR public = true',
-  		restrictIndices: properties.algolia_index,
+  		restrictIndices: process.env.ALGOLIA_INDEX,
   		userToken: userData.objectID
   	};
   	var publicKey = AlgoliaClient.generateSecuredApiKey(searchOnlyApiKey, params);
