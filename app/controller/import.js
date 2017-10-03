@@ -24,5 +24,6 @@ exports.acceptRequest = function(requestData) {
     }
     console.dir(text)
     d.resolve(text)
+  })
 	return d.promise
 }
