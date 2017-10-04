@@ -189,7 +189,7 @@ exports.handleMessage = function(body) {
 						default: {
 							logger.trace()
 							var result = {}
-							const extraData = attachments ? { attachments: attachments } : null
+							const extraData = event.message.attachments ? { attachments: event.message.attachments } : null
 							firstPromise = intentConfidence(sender, text)
 							setContext(sender, 'apiaiContexts', null) // Maybe don't always want to delete this straight away?
 						}
@@ -413,14 +413,15 @@ const handleQuickReplies = function(requestData, quickReply) {
 	return d.promise
 }
 
-const createAttachments = function(sender, attachments) {
+const createAttachment = function(attachments, sender) {
 	const type = attachments[0].type;
 	const url = (type=='fallback') ? attachments[0].url : attachments[0].payload.url;
-	return {
+	const attachment {
 		type: type,
-		url: url,
-		userID: sender
+		url: url
 	}
+	if (sender) attachment.userID = sender
+	return attachment
 }
 
 // Prepare attachments for the next message to contain text and seal the deal
@@ -428,7 +429,7 @@ const prepareAttachments = function(requestData, attachments) {
 	logger.trace()
 	const d = Q.defer()
 	const sender = requestData.sender
-	setContext(sender, 'holdingAttachment', createAttachments(sender, attachments));
+	setContext(sender, 'holdingAttachment', createAttachment(attachments, sender));
 	const quickReplies = [
 		["⤴️ Previous", "CORRECTION_ADD_ATTACHMENT"],
 		["⤵️ Next", "PREPARE_ATTACHMENT"],
@@ -712,7 +713,7 @@ function intentConfidence(sender, message, extraData) {
 		}
 	}
 	if (data.attachments) {
-		data.attachments = createAttachments(data.attachments)
+		data.attachments = createAttachment(data.attachments)
 		data.hasAttachments = true
 	} else if (getContext(sender, 'holdingAttachment')) {
 		data.attachments = [getContext(sender, 'holdingAttachment')]
