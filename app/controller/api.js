@@ -1,3 +1,4 @@
+//TODO: Remove temporary bits on lines 367, 497, 516
 //TODO: check that scheduled reminders include attachments
 //TODO: intent 'nextResult'
 //TODO: timezones
@@ -363,6 +364,7 @@ const recallMemory = function(requestData) {
 	fetchUserData(requestData.sender)
 	.then(function(content) {
 		const readAccessList = content.readAccess || [];
+    /* Temporarily allowing everything to search ACME userID */ readAccessList[readAccessList.length] = '101118387301286232222'
 		const userIdFilterString = 'userID: ' + requestData.sender + readAccessList.map(function(id) {return ' OR userID: '+id}).join('');
 		const searchParams = {
 			query: searchTerm.substring(0, 500), // Only sends Algolia the first 511 characters as it can't hanlogger.tracee more than that
@@ -473,7 +475,7 @@ const getDbObject = function(index, objectID, returnArray) {
 }
 
 const searchDb = function(index, params) {
-	logger.trace(searchDb)
+	logger.trace()
 	const d = Q.defer();
 	index.search(params, function searchDone(err, content) { /* @TODO: investigate whether function name is needed */
 		if (err) {
@@ -492,9 +494,11 @@ const searchDb = function(index, params) {
 }
 
 const saveToDb = function(sender, memory) {
-  logger.trace(saveToDb)
+  /* Temporarily replacing all Slack userIDs with ACME userID */ if(memory.userID.length < 10) memory.userID = '101118387301286232222'
+  logger.trace()
 	const d = Q.defer();
-	memory.dateCreated = Date.now();
+	memory.dateCreated = Date.now()
+  memory.dateUpdated = Date.now()
 	AlgoliaIndex.addObject(memory, function(err, content){
 		if (err) {
 			// sendTextMessage(id, "I couldn't remember that");
@@ -509,9 +513,10 @@ const saveToDb = function(sender, memory) {
 	return d.promise;
 }
 const updateDb = function(sender, memory) {
-	logger.trace(updateDb)
+  /* Temporarily replacing all Slack userIDs with ACME userID */ if(memory.userID.length < 10) memory.userID = '101118387301286232222'
+	logger.trace()
 	const d = Q.defer();
-	memory.dateUpdated = Date.now();
+	memory.dateUpdated = Date.now()
 	AlgoliaIndex.saveObject(memory, function(err, content){
 		if (err) {
 			logger.error(err);
@@ -524,7 +529,8 @@ const updateDb = function(sender, memory) {
 	return d.promise;
 }
 const deleteFromDb = function(sender, objectID) {
-	logger.trace(deleteFromDb)
+  // IS THIS SECURE? DOES IT DIFFERENTIATE BY SENDER????
+	logger.trace()
 	const d = Q.defer();
 	AlgoliaIndex.deleteObject(objectID, function(err, content){
 		if (err) {
