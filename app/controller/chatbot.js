@@ -414,9 +414,10 @@ const handleQuickReplies = function(requestData, quickReply) {
 }
 
 const createAttachment = function(attachments, sender) {
+	logger.info(attachments)
 	const type = attachments[0].type;
-	const url = (type=='fallback') ? attachments[0].url : attachments[0].payload.url;
-	const attachment {
+	const url = attachments[0].url || attachments[0].payload.url
+	const attachment = {
 		type: type,
 		url: url
 	}
@@ -429,12 +430,13 @@ const prepareAttachments = function(requestData, attachments) {
 	logger.trace()
 	const d = Q.defer()
 	const sender = requestData.sender
-	setContext(sender, 'holdingAttachment', createAttachment(attachments, sender));
+	attachments = createAttachment(attachments, sender)
+	setContext(sender, 'holdingAttachment', attachments);
 	const quickReplies = [
 		["⤴️ Previous", "CORRECTION_ADD_ATTACHMENT"],
 		["⤵️ Next", "PREPARE_ATTACHMENT"],
 	];
-	const messageData = createTextMessage(sender, "Did you want me to add this " + type + " to the previous message or the next one?", quickReplies)
+	const messageData = createTextMessage(sender, "Did you want me to add this " + attachments.type + " to the previous message or the next one?", quickReplies)
 	d.resolve({requestData: requestData, messageData: [{data: messageData}]})
 	return d.promise
 }
