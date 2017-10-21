@@ -918,7 +918,7 @@ const getWrittenMemory = function(requestData) {
     memory.description: rewriteSentence(requestData.resolvedQuery),
     memory.listItems: requestData.listItems,
   }
-  memory.extractedFrom = requestData.extractedFrom
+  memory.extractedFrom = requestData.extractedFrom;
   memory.attachments = requestData.attachments;
   if (requestData.objectID) memory.objectID = requestData.objectID;
   return memory
