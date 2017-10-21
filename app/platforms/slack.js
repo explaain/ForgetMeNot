@@ -15,8 +15,8 @@ const logger = tracer.colorConsole({level: 'log'});
 
 // Dev bootstrap
 initateSlackBot({
-	bot_access_token: process.env.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN,
-	bot_user_id: process.env.SLACK_BOT_USER_ID
+	bot_access_token: "xoxb-248382524992-erAIp1lU41jRmlS4fuxWHXwW",
+	bot_user_id: "U7AB8FEV6"
 });
 
 exports.oauth = function(req, res) {
