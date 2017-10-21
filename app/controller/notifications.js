@@ -1,5 +1,6 @@
 // Algolia setup
 const Q = require("q");
+const uuidv4 = require('uuid/v4');
 const AlgoliaSearch = require('algoliasearch');
 const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algolia_api_key,{ protocol: 'https:' });
 const AlgoliaIndex = AlgoliaClient.initIndex(process.env.ALGOLIA_INDEX);
@@ -8,18 +9,16 @@ const api = require('./api,js');
 
 // Store notification routes for each user, on DB (e.g. Browser approved)
 export registerNotificationSubscription(userID, notificationType, PushSubscription) {
-	return new Promise(resolve, reject) {
+	return new Promise(((resolve, reject) {
 		// Save this to user userID database object
 		fetchUserDataFromDb(userID)
 		.then(user => {
-			user.pushSubscriptions = user.pushSubscriptions || [];
-
-			user.pushSubscriptions.push({
+			user.notify = user.notify || {};
+			user.notify.options = user.notify.options || {}
+			user.notify.routes.push({
 				type: notificationType,
 				subscription: PushSubscription,
-				seen: false, // Can be greyed out?
-				dismissed: false, // Can be hidden?
-				date: Date.now()
+				enabled: true
 			})
 
 			AlgoliaIndex.saveObject(user, function(err, content) {
@@ -35,54 +34,84 @@ export registerNotificationSubscription(userID, notificationType, PushSubscripti
 	});
 }
 
-export registerNotification(type, payload, callback) {
-	return new Promise(resolve, reject) {
-		constructNotification(type, payload)
+/**
+ * @param {Object} notification { recipientID, type, payload }
+ * @param {Number} notification.recipientID
+ * @param {String} notification.type
+ * @param {Object} notification.payload
+*/
+export registerNotification(notification) {
+	return new Promise((resolve, reject) {
+		constructNotification(notification)
 		.then(sendNotification)
-		resolve(callback);
-	}
-}
-
-// Normally payload will look like {userID: 0, objectID: 1}
-export constructNotification(type, payload) {
-	return new Promise(resolve, reject) {
-		let notification = {
-			title,
-			message,
-			date: Date.now()
-		}
-
-		switch(type) {
-			case 'CARD_UPDATED':
-				const q = Q.defer()
-				q.all([
-					fetchUserDataFromDb(userID)
-					getDbObject(AlgoliaIndex, payload.objectID)
-				])
-				.then(function(user, card) {
-					notification.title = 'Card updated';
-					notification.message = `${user.name} edited the card ${card.title}`;
-					resolve(notification);
-				}).catch(function(e) { logger.error(e); reject(e) })
-				break;
-		}
+		.then(resolve) // Pass args from sendNotification to callback
 	})
 }
 
-export sendNotification(userID, notification, options) {
-	return new Promise(resolve, reject) {
-		let platformsArray = [];
+// Normally payload will look like {userID: 0, objectID: 1}
+export constructNotification(notification) {
+	return new Promise((resolve, reject) {
+		// Basic identification
+		notification.id = uuidv4();
+		notification.date = Date.now();
 
-		// Native notifications: https://github.com/mikaelbr/node-notifier
-		// Browser notifications: https://www.npmjs.com/package/web-push
-		// Apple Push Notifications? https://www.npmjs.com/package/apn
-		// Apple, Windows, Google Cloud, Amazon Device https://www.npmjs.com/package/node-pushnotifications
+		// Acquire data to flesh out the notification message
+		const q = Q.defer();
+		q.all([
+			fetchUserDataFromDb(userID),
+			getDbObject(AlgoliaIndex, payload.objectID)
+		])
+		.catch((e) => { logger.error(e); reject(e) })
+		.then((user, card) => {
+			switch(type) {
 
-		resolve(platformsArray)
-	}
+				case 'CARD_UPDATED':
+					notification.title = 'Card update request';
+					notification.message = `${user.name} wants to edit the card ${card.title}`;
+					resolve(notification);
+					break;
+
+				case 'CARD_DELETED':
+					notification.title = 'Card deletion request';
+					notification.message = `${user.name} wants to bin the card ${card.title}`;
+					resolve(notification);
+					break;
+
+				// ...
+
+			}
+		})
+	})
 }
 
-// Other notification actions? Native mac allows text response in-notification. notificationAction(notificationID, userID, actionType, payload)
-export dissmissNotification(notificationID) {
+/**
+ * @returns {Object} notification, [notifyRoutes]
+*/
+export sendNotification(notification) {
+	return new Promise((resolve, reject) {
+		let notifyRoutes = [];
 
+		fetchUserDataFromDb(notification.recipientID)
+		.then(user => {
+			// Native notifications: https://github.com/mikaelbr/node-notifier
+			// Browser notifications: https://www.npmjs.com/package/web-push
+			// Apple Push Notifications? https://www.npmjs.com/package/apn
+			// Apple, Windows, Google Cloud, Amazon Device https://www.npmjs.com/package/node-pushnotifications
+
+			resolve(notification, notifyRoutes);
+		});
+	});
+}
+
+// Hand off to whoever.
+export notificationAction(userID, notificationID, actionType) {
+	return new Promise(((resolve, reject) {
+		switch(actionType) {
+			case 'DISMISS_NOTIFICATION': resolve(); break;
+			case 'APPROVE_CARD_CREATION': resolve(); break;
+			case 'APPROVE_CARD_UPDATE': resolve(); break;
+			case 'APPROVE_CARD_DELETION': resolve(); break;
+			// ...
+		}
+	})
 }
