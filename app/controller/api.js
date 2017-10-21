@@ -106,7 +106,7 @@ exports.acceptRequest = function(requestData) {
 	const d = Q.defer()
   logger.info(requestData)
   if (!requestData.description) requestData.description = requestData.text || requestData.sentence
-  processNLP(requestData.sender, requestData.description || requestData.sentence || requestData.text, requestData.contexts)
+  processNLP(requestData.sender, requestData.content.description || requestData.description || requestData.sentence || requestData.text, requestData.contexts)
 	.then(function(nlpData) {
     requestData = combineObjects(requestData, nlpData)
 		return routeByIntent(requestData)
