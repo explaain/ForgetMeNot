@@ -40,20 +40,22 @@ export registerNotificationSubscription(userID, notificationType, PushSubscripti
  * @param {String} notification.type
  * @param {Object} notification.payload
 */
-export registerNotification(notification) {
+export notify(recipientID, type, payload) {
 	return new Promise((resolve, reject) {
-		constructNotification(notification)
-		.then(sendNotification)
+		constructNotification(type, payload)
+		.then((notification) => notifyUser(recipientID, notification))
 		.then(resolve) // Pass args from sendNotification to callback
 	})
 }
 
 // Normally payload will look like {userID: 0, objectID: 1}
-export constructNotification(notification) {
+constructNotification(type, payload) {
 	return new Promise((resolve, reject) {
 		// Basic identification
-		notification.id = uuidv4();
-		notification.date = Date.now();
+		let notification = {
+			id: uuidv4(),
+			date: Date.now()
+		}
 
 		// Acquire data to flesh out the notification message
 		const q = Q.defer();
@@ -85,26 +87,46 @@ export constructNotification(notification) {
 }
 
 /**
- * @returns {Object} notification, [notifyRoutes]
+ * @returns {Promise}
+ * @return {1:Object} notification
+ * @return {2:Array} [notifyRoutes]
 */
-export sendNotification(notification) {
+notifyUser(recipientID, notification) {
 	return new Promise((resolve, reject) {
-		let notifyRoutes = [];
-
-		fetchUserDataFromDb(notification.recipientID)
+		fetchUserDataFromDb(recipientID)
 		.then(user => {
-			// Native notifications: https://github.com/mikaelbr/node-notifier
-			// Browser notifications: https://www.npmjs.com/package/web-push
-			// Apple Push Notifications? https://www.npmjs.com/package/apn
-			// Apple, Windows, Google Cloud, Amazon Device https://www.npmjs.com/package/node-pushnotifications
 
-			resolve(notification, notifyRoutes);
+			let notificationQuests = [];
+
+			user.notify.routes.filter(r => r.enabled).forEach(route => {
+				notificationQuests.push(pushNotification(route, notification));
+			});
+
+			Q.all(notificationQuests)
+			.then((...routes) => resolve(notification, [...routes]));
+			.catch(reject);
+
 		});
 	});
 }
 
+function pushNotification(route, notification) {
+	return new Promise((resolve, reject) {
+		switch(route.type) {
+			'browser': // Browser notifications: https://www.npmjs.com/package/web-push
+				resolve('browser');
+				break;
+			'native': // Native notifications: https://github.com/mikaelbr/node-notifier
+				resolve('native');
+				break;
+			// Apple Push Notifications? https://www.npmjs.com/package/apn
+			// Apple, Windows, Google Cloud, Amazon Device https://www.npmjs.com/package/node-pushnotifications
+		}
+	})
+}
+
 // Hand off to whoever.
-export notificationAction(userID, notificationID, actionType) {
+notificationAction(userID, notificationID, actionType) {
 	return new Promise(((resolve, reject) {
 		switch(actionType) {
 			case 'DISMISS_NOTIFICATION': resolve(); break;
