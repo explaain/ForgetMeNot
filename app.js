@@ -16,6 +16,7 @@ var routes = require('./app/routes/index');
 var api = require('./app/routes/api');
 var users = require('./app/routes/users');
 var webhooks = require('./app/routes/webhooks');
+var notifications = require('./app/routes/notifications')
 
 var app = express();
 
@@ -40,6 +41,7 @@ app.use('/', routes);
 app.use('/api', api);
 app.use('/users', users);
 app.use('/webhook', webhooks);
+app.use('/notify', notifications)
 
 
 // catch 404 and forward to error handler
