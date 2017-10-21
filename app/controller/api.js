@@ -105,8 +105,8 @@ exports.acceptRequest = function(requestData) {
   logger.trace('acceptRequest');
 	const d = Q.defer()
   logger.info(requestData)
-  if (!requestData.description) requestData.description = requestData.text || requestData.sentence
-  processNLP(requestData.sender, requestData.content.description || requestData.description || requestData.sentence || requestData.text, requestData.contexts)
+  if (!requestData.content) requestData.content = { description: requestData.description || requestData.text || requestData.sentence }
+  processNLP(requestData.sender, requestData.content.description, requestData.contexts)
 	.then(function(nlpData) {
     requestData = combineObjects(requestData, nlpData)
 		return routeByIntent(requestData)
@@ -189,7 +189,7 @@ const routeByIntent = function(requestData) {
         }
 				if (memory.triggerURL) {
 					memory.triggerURL = memory.triggerURL[0]
-					memory.actionSentence = getActionSentence2(memory.sentence, memory.context)
+					memory.actionSentence = getActionSentence2(memory.content.description, memory.context)
           logger.info(memory.actionSentence)
           data.memories = [memory]
 					storeMemory(memory)
@@ -226,7 +226,7 @@ const routeByIntent = function(requestData) {
 				memory.reminderRecipient = requestData.sender;
 				if (dateTimeOriginal) {
           // memory.actionSentence = getActionSentence(memory.sentence, memory.context)
-          const actionText = rewriteSentence(memory.sentence, true)
+          const actionText = rewriteSentence(memory.content.description, true)
           memory.actionSentence = getEmojis(actionText) + ' ' + actionText;
           memory.triggerDateTimeNumeric = getDateTimeNum(dateTimeOriginal, dateTimeMemory)
     			memory.triggerDateTime = new Date(memory.triggerDateTimeNumeric);
@@ -442,7 +442,7 @@ const saveMemory = function(sender, m) {
 	.then(function(content) {
 		m.userID = content ? content.uploadTo || sender : sender;
 		const searchParams = {
-			query: m.sentence.substring(0, 500), // Only sends Algolia the first 511 characters as it can't hanlogger.tracee more than that
+			query: m.content.description.substring(0, 500), // Only sends Algolia the first 511 characters as it can't hanlogger.tracee more than that
 			filters: 'userID: ' + m.userID,
 			getRankingInfo: true
 		};
@@ -490,7 +490,7 @@ const searchDb = function(index, params) {
       logger.error(err);
 			d.reject(err)
 		} else {
-			logger.log(content.hits.map(function(hit) { return hit.sentence.substring(0,100) }));
+			logger.log(content.hits.map(function(hit) { return hit.content.description.substring(0,100) }));
 			fetchListItemCards(content.hits)
 			.then(function() {
         logger.trace()
@@ -653,7 +653,7 @@ const getDateTimeNum = function(dateTimeOriginal, memory) {
 
   // Trying out replacing all the above with Sherlock
 
-  var sherlockTime = Sherlock.parse(memory.sentence).startDate
+  var sherlockTime = Sherlock.parse(memory.content.description).startDate
   if (!sherlockTime.hasMeridian && sherlockTime.getHours() > 12) {
     sherlockAmTime = new Date(sherlockTime - 43200000)
     if (sherlockAmTime.getHours() > 7 && sherlockAmTime > new Date()) {
