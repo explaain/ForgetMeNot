@@ -1,27 +1,29 @@
-// Algolia setup
-const Q = require("q");
-const uuidv4 = require('uuid/v4');
+// DB
+const properties = require('../config/properties.js');
 const AlgoliaSearch = require('algoliasearch');
 const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algolia_api_key,{ protocol: 'https:' });
 const AlgoliaIndex = AlgoliaClient.initIndex(process.env.ALGOLIA_INDEX);
 const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
-const api = require('./api,js');
+// Algolia setup
+const Q = require("q");
+const uuidv4 = require('uuid/v4');
+const api = require('./api');
 
 // Store notification routes for each user, on DB (e.g. Browser approved)
-export registerNotificationSubscription(userID, notificationType, PushSubscription) {
-  return new Promise(((resolve, reject) {
+exports.registerNotificationSubscription = (userID, notificationType, PushSubscription) => {
+  return new Promise((resolve, reject) => {
     // Save this to user userID database object
     fetchUserDataFromDb(userID)
     .then(user => {
       user.notify = user.notify || {};
-      user.notify.options = user.notify.options || {}
+      user.notify.options = user.notify.options || {};
       user.notify.routes.push({
         type: notificationType,
         subscription: PushSubscription,
         enabled: true
-      })
+      });
 
-      AlgoliaIndex.saveObject(user, function(err, content) {
+      AlgoliaIndex.saveObject(user, (err, content) => {
         if (err) {
           logger.error(err);
           reject(err);
@@ -40,8 +42,8 @@ export registerNotificationSubscription(userID, notificationType, PushSubscripti
  * @param {String} notification.type
  * @param {Object} notification.payload
 */
-export notify(recipientID, type, payload) {
-  return new Promise((resolve, reject) {
+exports.notify = (recipientID, type, payload) => {
+  return new Promise((resolve, reject) => {
     constructNotification(type, payload)
     .then((notification) => notifyUser(recipientID, notification))
     .then(resolve) // Pass args from sendNotification to callback
@@ -49,8 +51,8 @@ export notify(recipientID, type, payload) {
 }
 
 // Normally payload will look like {userID: 0, objectID: 1}
-constructNotification(type, payload) {
-  return new Promise((resolve, reject) {
+function constructNotification(type, payload) {
+  return new Promise((resolve, reject) => {
     // Basic identification
     let notification = {
       id: uuidv4(),
@@ -91,8 +93,8 @@ constructNotification(type, payload) {
  * @return {1:Object} notification
  * @return {2:Array} [notifyRoutes]
 */
-notifyUser(recipientID, notification) {
-  return new Promise((resolve, reject) {
+function notifyUser(recipientID, notification) {
+  return new Promise((resolve, reject) => {
     fetchUserDataFromDb(recipientID)
     .then(user => {
 
@@ -103,7 +105,7 @@ notifyUser(recipientID, notification) {
       });
 
       Q.all(notificationQuests)
-      .then((...routes) => resolve(notification, [...routes]));
+      .then((...routes) => resolve(notification, [...routes]))
       .catch(reject);
 
     });
@@ -111,7 +113,7 @@ notifyUser(recipientID, notification) {
 }
 
 function pushNotification(route, notification) {
-  return new Promise((resolve, reject) {
+  return new Promise((resolve, reject) => {
     switch(route.type) {
       case 'browser': // Browser notifications: https://www.npmjs.com/package/web-push
         resolve('browser');
@@ -126,8 +128,8 @@ function pushNotification(route, notification) {
 }
 
 // Hand off to whoever.
-notificationAction(userID, notificationID, actionType) {
-  return new Promise(((resolve, reject) {
+function notificationAction(userID, notificationID, actionType) {
+  return new Promise((resolve, reject) => {
     switch(actionType) {
       case 'DISMISS_NOTIFICATION': resolve(); break;
       case 'APPROVE_CARD_CREATION': resolve(); break;
