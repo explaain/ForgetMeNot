@@ -10,10 +10,10 @@ const uuidv4 = require('uuid/v4');
 const api = require('./api');
 
 // Store notification routes for each user, on DB (e.g. Browser approved)
-exports.registerNotificationSubscription = (userID, notificationType, PushSubscription) => {
+exports.registerNotificationSubscription = ({userID, notificationType, PushSubscription}) => {
   return new Promise((resolve, reject) => {
     // Save this to user userID database object
-    fetchUserDataFromDb(userID)
+    api.fetchUserDataFromDb(userID)
     .then(user => {
       user.notify = user.notify || {};
       user.notify.options = user.notify.options || {};
@@ -41,8 +41,17 @@ exports.registerNotificationSubscription = (userID, notificationType, PushSubscr
  * @param {Number} notification.recipientID
  * @param {String} notification.type
  * @param {Object} notification.payload
+
+  {
+  	"recipientID": 1,
+  	"type": "CARD_UPDATED",
+  	"payload": {
+  		"objectID": 1,
+  		"userID": 2
+  	}
+  }
 */
-exports.notify = (recipientID, type, payload) => {
+exports.notify = ({recipientID, type, payload}) => {
   return new Promise((resolve, reject) => {
     constructNotification(type, payload)
     .then((notification) => notifyUser(recipientID, notification))
@@ -59,11 +68,12 @@ function constructNotification(type, payload) {
       date: Date.now()
     }
 
+    console.log(notification)
+
     // Acquire data to flesh out the notification message
-    const q = Q.defer();
-    q.all([
-      fetchUserDataFromDb(userID),
-      getDbObject(AlgoliaIndex, payload.objectID)
+    Q.all([
+      api.fetchUserDataFromDb(payload.userID),
+      api.getDbObject(AlgoliaIndex, payload.objectID)
     ])
     .catch((e) => { logger.error(e); reject(e) })
     .then((user, card) => {
@@ -95,7 +105,7 @@ function constructNotification(type, payload) {
 */
 function notifyUser(recipientID, notification) {
   return new Promise((resolve, reject) => {
-    fetchUserDataFromDb(recipientID)
+    api.fetchUserDataFromDb(recipientID)
     .then(user => {
 
       let notificationQuests = [];
