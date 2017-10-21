@@ -7,6 +7,7 @@
 //TODO: handle API.ai error
 //TODO: delete Cloudinary images when deleting memories
 //TODO: account for API.ai grabbing both trigger-time and trigger-date
+//TODO: return 400 etc errors when API receives invalid request (currently just breaks and eventually times out)
 
 
 
@@ -103,7 +104,10 @@ exports.deleteMemories = function(sender, objectID) {
 exports.acceptRequest = function(requestData) {
   logger.trace('acceptRequest');
 	const d = Q.defer()
-  processNLP(requestData.sender, requestData.text, requestData.contexts)
+  logger.info(requestData)
+  logger.info(requestData.sentence)
+  if (!requestData.description) requestData.description = requestData.text || requestData.sentence
+  processNLP(requestData.sender, requestData.description, requestData.contexts)
 	.then(function(nlpData) {
     requestData = combineObjects(requestData, nlpData)
 		return routeByIntent(requestData)
@@ -341,10 +345,15 @@ const processNLP = function(sender, text, contexts) {
         result.resolvedQuery = text //Should actually just not rely on resolvedQuery later on
 				d.resolve(result)
 			} else {
+        logger.error(response && response.statusCode);
+        logger.error(error);
+        // d.reject(error)
         // Need to handle this properly
-				logger.error(response.statusCode);
-				logger.error(error);
-				d.reject(error)
+        result = {
+          intent: 'storeMemory',
+          resolvedQuery: text,
+        }
+        d.resolve(result)
 			}
 		}
 		request(options, callback);
@@ -877,7 +886,7 @@ function rewriteSentence(originalSentence, reminder) { // Currently very primiti
 
 /* Now returns both context and all the other bits (except intent) */
 function extractAllContext(e) {
-	logger.trace(extractAllContext);
+	logger.trace();
 	const entities = JSON.parse(JSON.stringify(e)); // Hopefully this avoids deleting/editing things in the original entities object outside this function!
 		const finalEntities = {
 		context: [],
@@ -901,10 +910,15 @@ function extractAllContext(e) {
 }
 
 const getWrittenMemory = function(requestData) {
-  var memory = extractAllContext(requestData.parameters);
+  var memory = requestData.parameters ? extractAllContext(requestData.parameters) : {}
+  console.log(requestData);
   memory.intent = requestData.intent;
   memory.sender = requestData.sender;
-  memory.sentence = rewriteSentence(requestData.resolvedQuery);
+  memory.content = requestData.content || {
+    memory.description: rewriteSentence(requestData.resolvedQuery),
+    memory.listItems: requestData.listItems,
+  }
+  memory.extractedFrom = requestData.extractedFrom
   memory.attachments = requestData.attachments;
   if (requestData.objectID) memory.objectID = requestData.objectID;
   return memory
