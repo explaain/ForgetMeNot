@@ -460,7 +460,7 @@ const saveMemory = function(sender, m) {
 	return d.promise;
 }
 
-export const getDbObject = function(index, objectID, returnArray) {
+const getDbObject = function(index, objectID, returnArray) {
 	logger.trace()
 	const d = Q.defer();
 	index.getObject(objectID, returnArray, function(err, content) {
@@ -583,8 +583,7 @@ const fetchUserData = function(userID, forceRefresh) {
 	}
 	return d.promise
 }
-
-export const fetchUserDataFromDb = function(userID) {
+const fetchUserDataFromDb = function(userID) {
 	logger.trace()
 	return getDbObject(AlgoliaUsersIndex, userID)
 }
