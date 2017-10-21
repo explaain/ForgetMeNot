@@ -904,7 +904,11 @@ const getWrittenMemory = function(requestData) {
   var memory = extractAllContext(requestData.parameters);
   memory.intent = requestData.intent;
   memory.sender = requestData.sender;
-  memory.sentence = rewriteSentence(requestData.resolvedQuery);
+  memory.content = requestData.content || {
+    memory.description: rewriteSentence(requestData.resolvedQuery),
+    memory.listItems: requestData.listItems,
+  }
+  memory.extractedFrom = requestData.extractedFrom;
   memory.attachments = requestData.attachments;
   if (requestData.objectID) memory.objectID = requestData.objectID;
   return memory
