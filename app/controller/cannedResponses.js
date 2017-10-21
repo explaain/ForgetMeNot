@@ -142,7 +142,7 @@ Randoms.texts.consolation = [
 
 Randoms.texts.helpRequest = [
 	'Request for help noted! We\'ll get someone to look at your request as soon as we can.',
-	'I\'ve made a not for assitance and the team will respond within 1 hour'
+	'I\'ve made a note for assitance and the team will respond within 1 hour'
 ];
 
 
