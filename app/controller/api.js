@@ -492,7 +492,6 @@ const searchDb = function(index, params) {
       logger.error(err);
 			d.reject(err)
 		} else {
-			logger.log(content.hits.map(function(hit) { return hit.content.description.substring(0,100) }));
 			fetchListItemCards(content.hits)
 			.then(function() {
         logger.trace()
