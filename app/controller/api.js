@@ -129,7 +129,7 @@ const routeByIntent = function(requestData) {
   requestData.generalIntent = getGeneralIntent(requestData.intent)
   if (requestData.generalIntent == 'write') {
     memory = getWrittenMemory(requestData)
-    logger.log(memory)
+    logger.info(memory)
   }
   if (requestData.lastAction) var lastActionMemory = getWrittenMemory(requestData.lastAction.requestData);
   // if (requestData.intent == 'provideURL') requestData.intent = 'setTask.URL'
@@ -148,6 +148,7 @@ const routeByIntent = function(requestData) {
 			break;
 
 		case "storeMemory":
+      logger.info(memory)
 			storeMemory(memory)
 			.then(function() {
 				d.resolve(data)
@@ -438,6 +439,7 @@ const saveMemory = function(sender, m) {
 	logger.trace()
 	const d = Q.defer()
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
+  logger.info(m)
 	fetchUserData(sender)
 	.then(function(content) {
 		m.userID = content ? content.uploadTo || sender : sender;
@@ -910,7 +912,7 @@ function extractAllContext(e) {
 
 const getWrittenMemory = function(requestData) {
   var memory = requestData.parameters ? extractAllContext(requestData.parameters) : {}
-  console.log(requestData);
+  logger.info(requestData);
   memory.intent = requestData.intent;
   memory.sender = requestData.sender;
   memory.content = requestData.content || {
@@ -920,6 +922,7 @@ const getWrittenMemory = function(requestData) {
   memory.extractedFrom = requestData.extractedFrom
   memory.attachments = requestData.attachments;
   if (requestData.objectID) memory.objectID = requestData.objectID;
+  logger.info(memory);
   return memory
 }
 
