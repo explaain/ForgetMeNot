@@ -11,7 +11,8 @@ const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index
 // Algolia setup
 const uuidv4 = require('uuid/v4');
 const ForgetMeNotAPI = require('./api');
-// Notifications
+
+// Notifications config
 // firebase-adminsdk-q1d7p@forgetmenot-55f96.iam.gserviceaccount.com
 var FirebaseAdmin = require("firebase-admin");
 var serviceAccount = require("./firebaseKey.json"); // Secret file
@@ -19,6 +20,21 @@ FirebaseAdmin.initializeApp({
   credential: FirebaseAdmin.credential.cert(serviceAccount),
   databaseURL: "https://forgetmenot-55f96.firebaseio.com"
 });
+
+// Email config
+const functions = require('firebase-functions');
+const nodemailer = require('nodemailer');
+// READ CONFIGURATION: https://github.com/firebase/functions-samples/tree/master/quickstarts/email-users#setting-up-the-sample
+// Configure the email transport using the default SMTP transport and a GMail account.
+// For Gmail, enable these:
+// 1. https://www.google.com/settings/security/lesssecureapps
+// 2. https://accounts.google.com/DisplayUnlockCaptcha
+// For other types of transports such as Sendgrid see https://nodemailer.com/transports/
+// TODO: Configure the `gmail.email` and `gmail.password` Google Cloud environment variables.
+const gmailEmail = encodeURIComponent(functions.config().gmail.email);
+const gmailPassword = encodeURIComponent(functions.config().gmail.password);
+const mailTransport = nodemailer.createTransport(`smtps://${gmailEmail}:${gmailPassword}@smtp.gmail.com`);
+
 
 // Store notification routes for each user, on DB (e.g. Browser approved)
 exports.subscribe = ({userID, notificationType, PushSubscription}) => {
@@ -135,7 +151,7 @@ function notifyUser(recipientID, notification) {
       let notificationQuests = [];
 
       user.notify.routes.filter(r => r.enabled).forEach(route => {
-        notificationQuests.push(pushNotification(route, notification));
+        notificationQuests.push(pushNotification(user, route, notification));
       });
 
       Promise.all(notificationQuests)
@@ -146,7 +162,7 @@ function notifyUser(recipientID, notification) {
   });
 }
 
-function pushNotification(route, notification) {
+function pushNotification(user, route, notification) {
   return new Promise((resolve, reject) => {
     switch(route.type) {
 
@@ -162,6 +178,17 @@ function pushNotification(route, notification) {
             reject(error);
           });
         break;
+
+      case 'email':
+        mailOptions.subject = `ForgetMeNot notification: ${notification.title}`;
+        mailOptions.text = `Hey ${user.first_name || ''}!\n\n${notification.message}.\n\nCheers,\nTeam ForgetMeNot\n\n(This was an automated email.)`;
+        return mailTransport.sendMail({
+          from: `ForgetMeNot <noreply@firebase.com>`,
+          to: route.subscription
+        }).then(() => {
+          console.log('Email notification sent to', route.subscription);
+        });
+
       // case 'native': // Native notifications: https://github.com/mikaelbr/node-notifier
       //   resolve('native');
       //   break;
