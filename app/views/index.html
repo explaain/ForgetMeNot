@@ -12,8 +12,11 @@
   <body>
     <center id='vue-app'>
       <h4>ForgetMeTest push notify test</h4>
-      <button onClick='requestPermission()' :disabled="pushEnabled || pushToken">Setup notifications</button>
-      <button onClick='notify()' :disabled="!pushEnabled || !pushToken">User changed a card</button>
+      <button v-on:click='requestPermission("browser")' :disabled="pushEnabled || pushToken">Subscribe to browser notifications</button>
+      <button v-on:click='notify()' :disabled="(!pushEnabled || !pushToken) && !email">User changed a card</button>
+      <br>
+      <input type='email' v-model='email'/>
+      <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
     </center>
     <script src="client.js"></script>
   </body>

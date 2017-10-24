@@ -16,6 +16,7 @@ firebase.initializeApp(config);
 // Setup messaging
 const messaging = firebase.messaging();
 var appState = {
+  email: null,
   userID: 1627888800569309, // Demo
   userManagerID: 1627888800569309, // Demo
   pushEnabled: Boolean(Cookies.get('forgetmenot-push-token')),
@@ -24,19 +25,49 @@ var appState = {
 
 new Vue({
   el: '#vue-app',
-  data: () => appState
-})
+  data: () => appState,
+  methods: {
+    requestPermission(type) {
+      switch(type) {
+        case 'browser':
+          messaging.requestPermission()
+            .then(function() {
+              console.log('Notification permission granted.');
+              establishServerLink();
+            })
+            .catch(function(err) {
+              console.log('Unable to get permission to notify.', err);
+            });
+          break;
 
-function requestPermission() {
-  messaging.requestPermission()
-  .then(function() {
-    console.log('Notification permission granted.');
-    establishServerLink();
-  })
-  .catch(function(err) {
-    console.log('Unable to get permission to notify.', err);
-  });
-}
+        case 'email':
+          sendTokenToServer('email', this.email)
+      }
+    },
+    //# Just for demo #//
+    // More likely, you will just call
+    //    notifications.notify({recipientID, type, payload})
+    // from the server
+    notify() {
+      fetch('/notify/send', {
+        method: 'POST',
+        headers: {
+          'Content-type': 'application/json'
+        },
+        body: JSON.stringify({
+        	"recipientID": appState.userManagerID,
+        	"type": "CARD_UPDATED",
+        	"payload": {
+        		"objectID": 619948630,
+        		"userID": appState.userID
+        	}
+        })
+      })
+      .then(x => x.json())
+      .then(x => console.log(JSON.stringify(x)))
+    }
+  }
+})
 
 function establishServerLink() {
   // Get Instance ID token. Initially this makes a network call, once retrieved
@@ -44,7 +75,8 @@ function establishServerLink() {
   messaging.getToken()
   .then(function(currentToken) {
     if (currentToken) {
-      sendTokenToServer(currentToken);
+      sendTokenToServer('browser',currentToken)
+      .then(persistToken)
     } else {
       // Show permission request.
       console.log('No Instance ID token available. Request permission to generate one.');
@@ -65,7 +97,8 @@ function establishServerLink() {
       // Indicate that the new Instance ID token has not yet been sent to the app server.
       appState.pushToken = null;
       // Send Instance ID token to app server.
-      sendTokenToServer(refreshedToken);
+      sendTokenToServer('browser',refreshedToken)
+      .then(persistToken)
     })
     .catch(function(err) {
       console.log('Unable to retrieve refreshed token ', err);
@@ -73,51 +106,30 @@ function establishServerLink() {
   });
 }
 
-function sendTokenToServer(currentToken) {
-  fetch('/notify/subscribe', {
-    method: 'POST',
-    headers: {
-      'Content-type': 'application/json'
-    },
-    body: JSON.stringify({
-      userID: appState.userID, // Hardcoded
-      notificationType: 'browser',
-      PushSubscription: currentToken
-    }),
-  })
-  .then(x => x.json())
-  .then(x => {
-    console.log(JSON.stringify(x))
-    if(!x.error) {
-      console.log("Server response!");
-      Cookies.set('forgetmenot-push-token', currentToken);
-      appState.pushToken = currentToken;
-      appState.pushEnabled = true;
-    }
+function sendTokenToServer(type, currentToken) {
+  return new Promise((resolve,reject) => {
+    fetch('/notify/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        userID: appState.userID, // Hardcoded
+        notificationType: type,
+        PushSubscription: currentToken
+      }),
+    })
+    .catch(reject)
+    .then(x => x.json())
+    .then(x => resolve(currentToken))
   })
 }
 
-//# Just for demo #//
-// More likely, you will just call
-//    notifications.notify({recipientID, type, payload})
-// from the server
-function notify() {
-  fetch('/notify/send', {
-    method: 'POST',
-    headers: {
-      'Content-type': 'application/json'
-    },
-    body: JSON.stringify({
-    	"recipientID": appState.userManagerID,
-    	"type": "CARD_UPDATED",
-    	"payload": {
-    		"objectID": 619948630,
-    		"userID": appState.userID
-    	}
-    })
-  })
-  .then(x => x.json())
-  .then(x => console.log(JSON.stringify(x)))
+function persistToken(currentToken) {
+  console.log("Server response!");
+  Cookies.set('forgetmenot-push-token', currentToken);
+  appState.pushToken = currentToken;
+  appState.pushEnabled = true;
 }
 
 // Display notifications when the browser is active (user is clicked on)

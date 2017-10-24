@@ -22,7 +22,7 @@ FirebaseAdmin.initializeApp({
 });
 
 // Email config
-const functions = require('firebase-functions');
+// const functions = require('firebase-functions');
 const nodemailer = require('nodemailer');
 // READ CONFIGURATION: https://github.com/firebase/functions-samples/tree/master/quickstarts/email-users#setting-up-the-sample
 // Configure the email transport using the default SMTP transport and a GMail account.
@@ -31,8 +31,8 @@ const nodemailer = require('nodemailer');
 // 2. https://accounts.google.com/DisplayUnlockCaptcha
 // For other types of transports such as Sendgrid see https://nodemailer.com/transports/
 // TODO: Configure the `gmail.email` and `gmail.password` Google Cloud environment variables.
-const gmailEmail = encodeURIComponent(functions.config().gmail.email);
-const gmailPassword = encodeURIComponent(functions.config().gmail.password);
+const gmailEmail = encodeURIComponent(process.env.gmailAddress);
+const gmailPassword = encodeURIComponent(process.env.gmailPassword);
 const mailTransport = nodemailer.createTransport(`smtps://${gmailEmail}:${gmailPassword}@smtp.gmail.com`);
 
 
@@ -151,6 +151,7 @@ function notifyUser(recipientID, notification) {
       let notificationQuests = [];
 
       user.notify.routes.filter(r => r.enabled).forEach(route => {
+        console.log("➡️ Attempting notification via: ",route)
         notificationQuests.push(pushNotification(user, route, notification));
       });
 
@@ -180,14 +181,24 @@ function pushNotification(user, route, notification) {
         break;
 
       case 'email':
-        mailOptions.subject = `ForgetMeNot notification: ${notification.title}`;
-        mailOptions.text = `Hey ${user.first_name || ''}!\n\n${notification.message}.\n\nCheers,\nTeam ForgetMeNot\n\n(This was an automated email.)`;
-        return mailTransport.sendMail({
-          from: `ForgetMeNot <noreply@firebase.com>`,
-          to: route.subscription
+        mailTransport.sendMail({
+          from: `ForgetMeNot <noreply@forgetmenot.io>`,
+          to: route.subscription,
+          subject: `ForgetMeNot notification: ${notification.title}`,
+          text: `
+            Hey ${user.first_name || ''}!
+
+            ${notification.message}.
+
+            Cheers,
+            Team ForgetMeNot
+
+            (This was an automated email.)
+          `
         }).then(() => {
           console.log('Email notification sent to', route.subscription);
         });
+        break;
 
       // case 'native': // Native notifications: https://github.com/mikaelbr/node-notifier
       //   resolve('native');
