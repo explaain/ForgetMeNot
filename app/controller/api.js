@@ -483,6 +483,7 @@ const getDbObject = function(index, objectID, returnArray) {
 	});
 	return d.promise;
 }
+exports.getDbObject = getDbObject;
 
 const searchDb = function(index, params) {
 	logger.trace()
@@ -592,10 +593,12 @@ const fetchUserData = function(userID, forceRefresh) {
 	}
 	return d.promise
 }
+
 const fetchUserDataFromDb = function(userID) {
 	logger.trace()
 	return getDbObject(AlgoliaUsersIndex, userID)
 }
+exports.fetchUserDataFromDb = fetchUserDataFromDb;
 
 const createUserAccount = function(userData) {
 	logger.trace()

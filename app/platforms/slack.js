@@ -10,7 +10,8 @@ const SlackBot = require('slackbots');
 const RtmClient = require('@slack/client').RtmClient;
 
 const tracer = require('tracer')
-const logger = tracer.colorConsole({level: 'log'});
+const debug = false;
+const logger = debug ? tracer.colorConsole({level: 'log'}) : {trace:()=>{},log:()=>{}};
 // tracer.setLevel('error');
 
 // Dev bootstrap
