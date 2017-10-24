@@ -12,9 +12,8 @@
   <body>
     <center id='vue-app'>
       <h4>ForgetMeTest push notify test</h4>
-      <button onClick='requestPermission()'>Setup notifications</button>
-      <button onClick='notify()'>User changed a card</button>
-      <div>{{pushEnabled}}</div>
+      <button onClick='requestPermission()' :disabled="pushEnabled || pushToken">Setup notifications</button>
+      <button onClick='notify()' :disabled="!pushEnabled || !pushToken">User changed a card</button>
     </center>
     <script src="client.js"></script>
   </body>
