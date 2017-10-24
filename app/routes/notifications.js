@@ -5,7 +5,6 @@ var bodyParser = require('body-parser');
 var jsonParser = bodyParser.json();
 var router = express.Router();
 
-// Dev route
 router.post('/subscribe', jsonParser, (req,res) => {
   console.log(req.body)
   if(!req.body || !req.body.userID || !req.body.notificationType || !req.body.PushSubscription) {
@@ -33,24 +32,9 @@ router.post('/send', jsonParser, (req,res) => {
   }
   notifications.notify(req.body)
   .catch((e)=> res.status(500).json({error:{ id: 'bad-notify-response', message: e.message}}))
-  .then((notification, pushRoutes) => {
-    res.status(200).json({
-      notification,
-      pushRoutes
-    }).send();
+  .then(notificationReport => {
+    res.status(200).json(notificationReport).send();
   })
 });
-
-router.get('/curry', (req,res) => {
-  notifications.notify({
-    "recipientID": 1627888800569309,
-    "type": "CARD_UPDATED",
-    "payload": {
-      "objectID": 619948630,
-      "userID": 1627888800569309
-    }
-  }).catch((e)=> res.status(500).json({error:{ id: 'bad-notify-response', message: e.message}}))
-  .then((notification, pushRoutes) => {res.status(200).send()})
-})
 
 module.exports = router;

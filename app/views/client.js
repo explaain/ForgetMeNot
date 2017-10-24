@@ -41,6 +41,7 @@ new Vue({
 
         case 'email':
           sendTokenToServer('email', this.email)
+          .then((e) => console.log("Email stored", e))
       }
     },
     //# Just for demo #//
@@ -63,7 +64,7 @@ new Vue({
         })
       })
       .then(x => x.json())
-      .then(x => console.log(JSON.stringify(x)))
+      .then(x => console.log("Notification request received by server", JSON.stringify(x)))
     }
   }
 })

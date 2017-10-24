@@ -33,8 +33,13 @@ const gmailEmail = encodeURIComponent(process.env.gmailAddress);
 const gmailPassword = encodeURIComponent(process.env.gmailPassword);
 const mailTransport = nodemailer.createTransport(`smtps://${gmailEmail}:${gmailPassword}@smtp.gmail.com`);
 
-
-// Store notification routes for each user, on DB (e.g. Browser approved)
+/**
+ * Store notification routes for each user, on DB (e.g. Browser approved)
+ * @param {Object} subscription
+ * @param {Number} subscription.userID
+ * @param {String} notificationType (e.g. 'email', 'browser'). Determines notification behaviour down bottom of this page.
+ * @param PushSubscription can be a string, object or whatever. type===browser expects a browserPushNotifyString, type===email expects email address, etc. etc.
+*/
 exports.subscribe = ({userID, notificationType, PushSubscription}) => {
   return new Promise((resolve, reject) => {
     // Save this to user userID database object
@@ -43,13 +48,17 @@ exports.subscribe = ({userID, notificationType, PushSubscription}) => {
     .then(user => {
       user.notify = user.notify || { options: {}, routes: []};
 
-      var existingSubscription = user.notify.routes.find(r => r.type === notificationType);
+      // If you only want one email/browser per user
+      // var existingSubscription = user.notify.routes.find(r => r.type === notificationType);
+      // If you want multiple subscriptions per route-type (i.e. multiple browsers, emails)
+      // Can get as granular as you like...
+      var existingSubscription = user.notify.routes.find(r => r.subscription === PushSubscription);
 
       if(!existingSubscription) {
         user.notify.routes.push({
           type: notificationType,
           subscription: PushSubscription,
-          enabled: true
+          enabled: true // Configure this via a user settings panel
         });
       } else {
         // Updated token or whatever
@@ -75,6 +84,7 @@ exports.subscribe = ({userID, notificationType, PushSubscription}) => {
  * @param {String} notification.type
  * @param {Object} notification.payload
 
+ E.g.
   {
   	"recipientID": 1,
   	"type": "CARD_UPDATED",
@@ -82,6 +92,18 @@ exports.subscribe = ({userID, notificationType, PushSubscription}) => {
   		"objectID": 1,
   		"userID": 2
   	}
+  }
+
+  @returns a notification report { notification, routes }
+  {
+    notification : {
+      date: "1508843648834",
+      id: "dc30fa02-b04e-4c93-9a33-72cfaa4c692e",
+      message: "Jeremy wants to update a card: Inject Meeting Notes",
+      title: "Card update request",
+      type: "CARD_UPDATED"
+    }
+    routes : ["browser", "email"] // So you know where it went.
   }
 */
 exports.notify = ({recipientID, type, payload}) => {
@@ -135,7 +157,7 @@ function constructNotification(type, payload) {
  * @return {2:Array} [notifyRoutes]
 */
 function notifyUser(recipientID, notification) {
-  console.log("✅ \n\nThe notification", notification,"\n\n\n");
+  console.log("\n\nThe notification", notification,"\n\n\n");
 
   return new Promise((resolve, reject) => {
     ForgetMeNotAPI.getDbObject(AlgoliaUsersIndex, recipientID)
@@ -152,8 +174,10 @@ function notifyUser(recipientID, notification) {
         notificationQuests.push(pushNotification(user, route, notification));
       });
 
+      console.log(`Attempting ${notificationQuests.length} notify routes`)
+
       Promise.all(notificationQuests)
-      .then((routes) => resolve(notification, routes))
+      .then((routes) => { console.log("✅ All routes"); resolve({notification, routes}) })
       .catch(reject);
 
     });
@@ -167,6 +191,8 @@ function pushNotification(user, route, notification) {
       // READ: Firebase handling for multiple devices: https://firebase.google.com/docs/cloud-messaging/admin/send-messages
 
       case 'browser':
+        // READ: https://developer.chrome.com/apps/notifications#type-NotificationOptions
+        // Options for notification buttons in Chrome
         FirebaseAdmin.messaging().sendToDevice(route.subscription, { data: notification })
           .then((response) => {
             resolve('browser');
@@ -192,8 +218,14 @@ function pushNotification(user, route, notification) {
 
             (This was an automated email.)
           `
-        }).then(() => {
+        })
+        .then((response) => {
+          resolve('email');
           console.log('Email notification sent to', route.subscription);
+        })
+        .catch((error) => {
+          console.log("Error sending email", error);
+          reject(error);
         });
         break;
 
