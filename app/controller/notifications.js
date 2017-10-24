@@ -22,7 +22,6 @@ FirebaseAdmin.initializeApp({
 });
 
 // Email config
-// const functions = require('firebase-functions');
 const nodemailer = require('nodemailer');
 // READ CONFIGURATION: https://github.com/firebase/functions-samples/tree/master/quickstarts/email-users#setting-up-the-sample
 // Configure the email transport using the default SMTP transport and a GMail account.
@@ -30,7 +29,6 @@ const nodemailer = require('nodemailer');
 // 1. https://www.google.com/settings/security/lesssecureapps
 // 2. https://accounts.google.com/DisplayUnlockCaptcha
 // For other types of transports such as Sendgrid see https://nodemailer.com/transports/
-// TODO: Configure the `gmail.email` and `gmail.password` Google Cloud environment variables.
 const gmailEmail = encodeURIComponent(process.env.gmailAddress);
 const gmailPassword = encodeURIComponent(process.env.gmailPassword);
 const mailTransport = nodemailer.createTransport(`smtps://${gmailEmail}:${gmailPassword}@smtp.gmail.com`);
@@ -89,10 +87,9 @@ exports.subscribe = ({userID, notificationType, PushSubscription}) => {
 exports.notify = ({recipientID, type, payload}) => {
   return new Promise((resolve, reject) => {
     constructNotification(type, payload)
-    .catch(reject)
-    .then((notification) => notifyUser(recipientID, notification))
-    .catch(reject)
+    .then(notification => notifyUser(recipientID, notification))
     .then(resolve) // Pass args from sendNotification to callback
+    .catch(reject)
   })
 }
 
@@ -171,10 +168,10 @@ function pushNotification(user, route, notification) {
 
       case 'browser':
         FirebaseAdmin.messaging().sendToDevice(route.subscription, { data: notification })
-          .then(function(response) {
+          .then((response) => {
             resolve('browser');
           })
-          .catch(function(error) {
+          .catch((error) => {
             console.log("Error sending notification via Firebase", error);
             reject(error);
           });
