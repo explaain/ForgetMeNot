@@ -235,19 +235,21 @@ function pushNotification(user, route, notification) {
 
       case 'email':
         mailTransport.sendMail({
-          from: `ForgetMeNot <noreply@forgetmenot.io>`,
+          from: `"ForgetMeNot" <notifications@forgetmenot.com>`,
           to: route.subscription,
           subject: `ForgetMeNot notification: ${notification.title}`,
-          text: `
-            Hey ${user.first_name || ''}!
+          html: `
+<p>Hey ${user.first_name || ''},</p>
 
-            ${notification.message}.
+<p><b>${notification.message}</b></p>
 
-            Cheers,
-            Team ForgetMeNot
+<p><a href='#' style='padding: 10px; border-radius: 4px; background: #FFD842; font-weight: bold; color: black; text-decoration: none; font-size: 1.3em;'>Action this</a></p>
 
-            (This was an automated email.)
-          `
+<p>Cheers,<br />
+The ForgetMeNot Team</p>
+
+<p style='color: grey;'>This was an automated email.</p>
+          `.trim()
         })
         .then((response) => {
           resolve(route);
