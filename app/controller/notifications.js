@@ -1,3 +1,7 @@
+require('dotenv').config();
+// Misc
+const tracer = require('tracer')
+const logger = tracer.colorConsole({level: 'info'});
 // DB
 const properties = require('../config/properties.js');
 const AlgoliaSearch = require('algoliasearch');
@@ -5,30 +9,45 @@ const AlgoliaClient = AlgoliaSearch(properties.algolia_app_id, properties.algoli
 const AlgoliaIndex = AlgoliaClient.initIndex(process.env.ALGOLIA_INDEX);
 const AlgoliaUsersIndex = AlgoliaClient.initIndex(properties.algolia_users_index);
 // Algolia setup
-const Q = require("q");
 const uuidv4 = require('uuid/v4');
-const api = require('./api');
+const ForgetMeNotAPI = require('./api');
+// Notifications
+// firebase-adminsdk-q1d7p@forgetmenot-55f96.iam.gserviceaccount.com
+var FirebaseAdmin = require("firebase-admin");
+var serviceAccount = require("./firebaseKey.json"); // Secret file
+FirebaseAdmin.initializeApp({
+  credential: FirebaseAdmin.credential.cert(serviceAccount),
+  databaseURL: "https://forgetmenot-55f96.firebaseio.com"
+});
 
 // Store notification routes for each user, on DB (e.g. Browser approved)
-exports.registerNotificationSubscription = ({userID, notificationType, PushSubscription}) => {
+exports.subscribe = ({userID, notificationType, PushSubscription}) => {
   return new Promise((resolve, reject) => {
     // Save this to user userID database object
-    api.fetchUserDataFromDb(userID)
-    .then(user => {
-      user.notify = user.notify || {};
-      user.notify.options = user.notify.options || {};
-      user.notify.routes.push({
-        type: notificationType,
-        subscription: PushSubscription,
-        enabled: true
-      });
 
-      AlgoliaIndex.saveObject(user, (err, content) => {
+    ForgetMeNotAPI.getDbObject(AlgoliaUsersIndex, userID)
+    .then(user => {
+      user.notify = user.notify || { options: {}, routes: []};
+
+      var existingSubscription = user.notify.routes.find(r => r.type === notificationType);
+
+      if(!existingSubscription) {
+        user.notify.routes.push({
+          type: notificationType,
+          subscription: PushSubscription,
+          enabled: true
+        });
+      } else {
+        // Updated token or whatever
+        existingSubscription.subscription = PushSubscription;
+      }
+
+      AlgoliaUsersIndex.saveObject(user, (err, content) => {
         if (err) {
           logger.error(err);
           reject(err);
         } else {
-          logger.trace('User push notify settings saved!');
+          logger.trace('✅ User push notify settings saved!');
           resolve(user);
         }
       });
@@ -54,7 +73,9 @@ exports.registerNotificationSubscription = ({userID, notificationType, PushSubsc
 exports.notify = ({recipientID, type, payload}) => {
   return new Promise((resolve, reject) => {
     constructNotification(type, payload)
+    .catch(reject)
     .then((notification) => notifyUser(recipientID, notification))
+    .catch(reject)
     .then(resolve) // Pass args from sendNotification to callback
   })
 }
@@ -65,29 +86,26 @@ function constructNotification(type, payload) {
     // Basic identification
     let notification = {
       id: uuidv4(),
-      date: Date.now()
+      date: Date.now().toString()
     }
 
-    console.log(notification)
-
     // Acquire data to flesh out the notification message
-    Q.all([
-      api.fetchUserDataFromDb(payload.userID),
-      api.getDbObject(AlgoliaIndex, payload.objectID)
+    Promise.all([
+      ForgetMeNotAPI.getDbObject(AlgoliaUsersIndex, Number(payload.userID)),
+      ForgetMeNotAPI.getDbObject(AlgoliaIndex, Number(payload.objectID))
     ])
-    .catch((e) => { logger.error(e); reject(e) })
-    .then((user, card) => {
+    .catch((err) => { logger.error(err); reject(err) })
+    .then(([user, card]) => {
+      console.log("✅ Pulled USER DATA:", user.objectID);
+      console.log("✅ Pulled CARD DATA:", card.objectID);
+      console.log(type);
+
       switch(type) {
 
         case 'CARD_UPDATED':
+          notification.type = type; // For notification icons etc.
           notification.title = 'Card update request';
-          notification.message = `${user.name} wants to edit the card ${card.title}`;
-          resolve(notification);
-          break;
-
-        case 'CARD_DELETED':
-          notification.title = 'Card deletion request';
-          notification.message = `${user.name} wants to bin the card ${card.title}`;
+          notification.message = `${user.first_name} wants to update a card: ${card.sentence}`;
           resolve(notification);
           break;
 
@@ -104,9 +122,15 @@ function constructNotification(type, payload) {
  * @return {2:Array} [notifyRoutes]
 */
 function notifyUser(recipientID, notification) {
+  console.log("✅ \n\nThe notification", notification,"\n\n\n");
+
   return new Promise((resolve, reject) => {
-    api.fetchUserDataFromDb(recipientID)
+    ForgetMeNotAPI.getDbObject(AlgoliaUsersIndex, recipientID)
     .then(user => {
+      if(!user.notify || !user.notify.routes || user.notify.routes.length === 0) {
+        logger.erro("No available notify routes for recipient", user.first_name, recipientID);
+        return reject("No available routes");
+      }
 
       let notificationQuests = [];
 
@@ -114,8 +138,8 @@ function notifyUser(recipientID, notification) {
         notificationQuests.push(pushNotification(route, notification));
       });
 
-      Q.all(notificationQuests)
-      .then((...routes) => resolve(notification, [...routes]))
+      Promise.all(notificationQuests)
+      .then((routes) => resolve(notification, routes))
       .catch(reject);
 
     });
@@ -125,12 +149,22 @@ function notifyUser(recipientID, notification) {
 function pushNotification(route, notification) {
   return new Promise((resolve, reject) => {
     switch(route.type) {
-      case 'browser': // Browser notifications: https://www.npmjs.com/package/web-push
-        resolve('browser');
+
+      // READ: Firebase handling for multiple devices: https://firebase.google.com/docs/cloud-messaging/admin/send-messages
+
+      case 'browser':
+        FirebaseAdmin.messaging().sendToDevice(route.subscription, { data: notification })
+          .then(function(response) {
+            resolve('browser');
+          })
+          .catch(function(error) {
+            console.log("Error sending notification via Firebase", error);
+            reject(error);
+          });
         break;
-      case 'native': // Native notifications: https://github.com/mikaelbr/node-notifier
-        resolve('native');
-        break;
+      // case 'native': // Native notifications: https://github.com/mikaelbr/node-notifier
+      //   resolve('native');
+      //   break;
       // Apple Push Notifications? https://www.npmjs.com/package/apn
       // Apple, Windows, Google Cloud, Amazon Device https://www.npmjs.com/package/node-pushnotifications
     }

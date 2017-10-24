@@ -1,4 +1,6 @@
 // DEPENDENCIES
+require('dotenv').config();
+
 var express = require('express');
 var cors = require('cors')
 var path = require('path');
@@ -12,7 +14,6 @@ var mongoose = require('mongoose');
 
 var apiController = require('./app/controller/chatbot');
 
-var routes = require('./app/routes/index');
 var api = require('./app/routes/api');
 var users = require('./app/routes/users');
 var webhooks = require('./app/routes/webhooks');
@@ -25,24 +26,18 @@ app.use(cors())
 // MongoDB database
 // mongoose.connect('mongodb://localhost/ForgetMeTest');
 
-// view engine setup
-app.set('views', path.join(__dirname, 'app', 'views'));
-app.set('view engine', 'pug');
-
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', routes);
+app.use('/', express.static('./app/views'));
 app.use('/api', api);
 app.use('/users', users);
 app.use('/webhook', webhooks);
 app.use('/notify', notifications)
-
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
