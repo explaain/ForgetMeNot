@@ -56,6 +56,7 @@ exports.subscribe = ({userID, notificationType, PushSubscription}) => {
 
       if(!existingSubscription) {
         user.notify.routes.push({
+          id: uuidv4(),
           type: notificationType,
           subscription: PushSubscription,
           enabled: true // Configure this via a user settings panel
@@ -74,7 +75,36 @@ exports.subscribe = ({userID, notificationType, PushSubscription}) => {
           resolve(user);
         }
       });
-    });
+    })
+    .catch(reject)
+  });
+}
+
+exports.unsubscribe = (userID, routeID) => {
+  return new Promise((resolve, reject) => {
+    // Save this to user userID database object
+
+    ForgetMeNotAPI.getDbObject(AlgoliaUsersIndex, userID)
+    .then(user => {
+      user.notify = user.notify || { options: {}, routes: []};
+      let routeIndex = user.notify.routes.findIndex(r => r.id === routeID);
+      if(routeIndex > -1) {
+        user.notify.routes.splice(routeIndex, 1);
+
+        AlgoliaUsersIndex.saveObject(user, (err, content) => {
+          if (err) {
+            logger.error(err);
+            reject(err);
+          } else {
+            logger.trace('✅ Removed route id',routeID);
+            resolve(user);
+          }
+        });
+      } else {
+        resolve(user);
+      }
+    })
+    .catch(reject)
   });
 }
 
@@ -163,8 +193,8 @@ function notifyUser(recipientID, notification) {
     ForgetMeNotAPI.getDbObject(AlgoliaUsersIndex, recipientID)
     .then(user => {
       if(!user.notify || !user.notify.routes || user.notify.routes.length === 0) {
-        logger.erro("No available notify routes for recipient", user.first_name, recipientID);
-        return reject("No available routes");
+        logger.error("❌ No available notify routes for recipient", user.first_name, recipientID);
+        return resolve({notification, routes: []});
       }
 
       let notificationQuests = [];
@@ -195,7 +225,7 @@ function pushNotification(user, route, notification) {
         // Options for notification buttons in Chrome
         FirebaseAdmin.messaging().sendToDevice(route.subscription, { data: notification })
           .then((response) => {
-            resolve('browser');
+            resolve(route);
           })
           .catch((error) => {
             console.log("Error sending notification via Firebase", error);
@@ -220,7 +250,7 @@ function pushNotification(user, route, notification) {
           `
         })
         .then((response) => {
-          resolve('email');
+          resolve(route);
           console.log('Email notification sent to', route.subscription);
         })
         .catch((error) => {

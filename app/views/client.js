@@ -15,11 +15,13 @@ firebase.initializeApp(config);
 // Setup messaging
 const messaging = firebase.messaging();
 var appState = {
-  email: null,
   userID: 1627888800569309, // Demo
   userManagerID: 1627888800569309, // Demo
-  pushEnabled: Boolean(Cookies.get('forgetmenot-push-token')),
-  pushToken: Cookies.get('forgetmenot-push-token')
+  pushEnabled: Boolean(Cookies.get('forgetmenot-browser')),
+  pushToken: Cookies.get('forgetmenot-browser'),
+  emailInput: Cookies.get('forgetmenot-email'),
+  email: Cookies.get('forgetmenot-email'),
+  lastNotifyAttempt: []
 }
 
 new Vue({
@@ -40,15 +42,38 @@ new Vue({
           break;
 
         case 'email':
-          sendTokenToServer('email', this.email)
-          .then((e) => console.log("Email stored", e))
+          sendTokenToServer('email', this.emailInput)
+          .then((routes) => {
+            console.log("Email stored", this.emailInput)
+            Cookies.set('forgetmenot-email', this.emailInput);
+            appState.email = this.emailInput;
+            this.lastNotifyAttempt =routes;
+          })
       }
     },
+
+    unsubscribe(routeID) {
+      fetch(`/notify/unsubscribe/${this.userID}/${routeID}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-type': 'application/json'
+        }
+      })
+      .then(x => x.json())
+      .then(user => {
+        console.log("Unsubscribe notify route",routeID)
+        this.lastNotifyAttempt = user.notify.routes;
+        // TODO: Also need to remove cookies n stuff
+      })
+    },
+
     //# Just for demo #//
     // More likely, you will just call
     //    notifications.notify({recipientID, type, payload})
     // from the server
     notify() {
+      this.lastNotifyAttempt = [];
+
       fetch('/notify/send', {
         method: 'POST',
         headers: {
@@ -64,7 +89,10 @@ new Vue({
         })
       })
       .then(x => x.json())
-      .then(x => console.log("Notification request received by server", JSON.stringify(x)))
+      .then(x => {
+        console.log("Notification request received by server", JSON.stringify(x))
+        this.lastNotifyAttempt = x.routes;
+      })
     }
   }
 })
@@ -76,7 +104,7 @@ function establishServerLink() {
   .then(function(currentToken) {
     if (currentToken) {
       sendTokenToServer('browser',currentToken)
-      .then(persistToken)
+      .then(routes => persistToken(routes, currentToken))
     } else {
       // Show permission request.
       console.log('No Instance ID token available. Request permission to generate one.');
@@ -98,7 +126,7 @@ function establishServerLink() {
       appState.pushToken = null;
       // Send Instance ID token to app server.
       sendTokenToServer('browser',refreshedToken)
-      .then(persistToken)
+      .then(routes => persistToken(routes, refreshedToken))
     })
     .catch(function(err) {
       console.log('Unable to retrieve refreshed token ', err);
@@ -121,15 +149,16 @@ function sendTokenToServer(type, currentToken) {
     })
     .catch(reject)
     .then(x => x.json())
-    .then(x => resolve(currentToken))
+    .then(user => resolve(user.notify.routes))
   })
 }
 
-function persistToken(currentToken) {
+function persistToken(routes, newToken) {
   console.log("Server response!");
-  Cookies.set('forgetmenot-push-token', currentToken);
-  appState.pushToken = currentToken;
+  Cookies.set('forgetmenot-browser', newToken);
+  appState.pushToken = newToken;
   appState.pushEnabled = true;
+  this.lastNotifyAttempt = routes;
 }
 
 // Display notifications when the browser is active (user is clicked on)

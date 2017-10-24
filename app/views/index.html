@@ -4,20 +4,27 @@
     <meta charset="utf-8">
     <link rel="manifest" href="manifest.json">
     <title>FMN Push Notification demo</title>
-    <style>* { zoom: 1.2; font-family: -apple-system, BlinkMacSystemFont, 'avenir next', avenir, helvetica, 'helvetica neue', ubuntu, roboto, noto, 'segoe ui', arial, sans-serif; }</style>
+    <style>#vue-app { zoom: 2; font-family: -apple-system, BlinkMacSystemFont, 'avenir next', avenir, helvetica, 'helvetica neue', ubuntu, roboto, noto, 'segoe ui', arial, sans-serif; }</style>
     <script src="https://www.gstatic.com/firebasejs/4.5.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/4.5.0/firebase-messaging.js"></script>
     <script src="https://unpkg.com/vue"></script>
   </head>
   <body>
-    <center id='vue-app'>
-      <h4>ForgetMeTest push notify test</h4>
-      <button v-on:click='requestPermission("browser")' :disabled="pushEnabled || pushToken">Subscribe to browser notifications</button>
-      <button v-on:click='notify()' :disabled="(!pushEnabled || !pushToken) && !email">User changed a card</button>
+    <div id='vue-app' style='max-width: 400px; margin: 0 auto; padding-top: 30px;'>
+       <h4>ForgetMeTest push notify test</h4>
+      <button v-on:click='requestPermission("browser")' :disabled="pushEnabled || pushToken">{{ pushEnabled && pushToken ? "✅🔔 Subscribed to push notifications" : "🔕 No push notifications"}}</button>
+       <br>
+      <input type='email' v-model='emailInput' placeholder='notify@me.com' autocomplete/>
+      <button v-on:click='requestPermission("email")' :disabled="!emailInput">{{ email ? "✅📩 Subscribed to emails" : "🔕 No email notifications"}}</button>
       <br>
-      <input type='email' v-model='email'/>
-      <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
-    </center>
+      <br>
+      <button v-on:click='notify()' :disabled="(!pushEnabled || !pushToken) && !email">🎉 Jeremy notifies someone 🍾</button>
+      <div v-for='route in lastNotifyAttempt' style='font-size: 8px;'>
+        <button v-on:click='unsubscribe(route.id)' style='display: inline-block; vertical-align: middle;'>🔕 Unsubscribe</button>
+        &nbsp;
+        <code style='display: inline-block; padding: 3px; background: #DDD; font-family: monospace; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; width: 70%; vertical-align: middle;'>🔔 {{route.type}} ({{route.subscription}})</code>
+      </div>
+    </div>
     <script src="client.js"></script>
   </body>
 </html>
