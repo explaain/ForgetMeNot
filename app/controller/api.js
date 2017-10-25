@@ -184,7 +184,7 @@ const routeByIntent = function(requestData) {
         memory.intent = 'setTask.URL'
         const urlMemory = getWrittenMemory(requestData)
 				memory.reminderRecipient = requestData.sender;
-				memory.triggerURL = urlMemory.entities['trigger-website'] || urlMemory.entities['trigger-url'];
+				if (!memory.triggerURL) memory.triggerURL = urlMemory.entities['trigger-website'] || urlMemory.entities['trigger-url'];
         if (!memory.triggerURL && requestData.intent == 'provideURL') {
           memory.triggerURL = urlMemory.entities['website'] || urlMemory.entities['url']
         }
@@ -456,6 +456,7 @@ const saveMemory = function(sender, m) {
 		return m.hasAttachments && m.attachments[0].type=="image" ? backupAttachment(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
 	}).then(function(url) {
 		if (m.hasAttachments && url) m.attachments[0].url = url;
+    logger.info('🔆 🔆 🔆 ', m)
 		if (m.objectID) {
 			return updateDb(sender, m)
 		} else {
@@ -914,7 +915,7 @@ function extractAllContext(e) {
 
 const getWrittenMemory = function(requestData) {
   var memory = requestData.parameters ? extractAllContext(requestData.parameters) : {}
-  logger.info(requestData);
+  logger.info('❇️ ❇️ ❇️ ' + requestData.intent)
   memory.intent = requestData.intent;
   memory.sender = requestData.sender;
   memory.content = requestData.content || {
@@ -924,6 +925,7 @@ const getWrittenMemory = function(requestData) {
   memory.sentence = memory.content.description // Temporary until we update chrome extension
   memory.extractedFrom = requestData.extractedFrom
   memory.attachments = requestData.attachments;
+  memory.triggerURL = requestData.triggerURL;
   if (requestData.objectID) memory.objectID = requestData.objectID;
   logger.info(memory);
   return memory

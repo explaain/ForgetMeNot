@@ -9,7 +9,7 @@ var router = express.Router();
 router.post('/memories', function(req, res) {
   const data = req.body;
   data.allInOne = true
-  data.intent = 'storeMemory'
+  if (!data.intent) data.intent = 'storeMemory'
   apiController.acceptRequest(data)
   .then(function(results) {
 		res.status(200).send(results);
