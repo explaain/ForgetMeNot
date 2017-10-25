@@ -921,6 +921,8 @@ const getWrittenMemory = function(requestData) {
     description: rewriteSentence(requestData.resolvedQuery),
     listItems: requestData.listItems,
   }
+  memory.sentence = memory.content.description // Temporary until we update chrome extension
+  memory.description = memory.content.description // Temporary until we update chrome extension
   memory.extractedFrom = requestData.extractedFrom
   memory.attachments = requestData.attachments;
   if (requestData.objectID) memory.objectID = requestData.objectID;
