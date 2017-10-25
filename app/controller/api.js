@@ -189,7 +189,7 @@ const routeByIntent = function(requestData) {
           memory.triggerURL = urlMemory.entities['website'] || urlMemory.entities['url']
         }
 				if (memory.triggerURL) {
-					memory.triggerURL = memory.triggerURL[0]
+					if (Array.isArray(memory.triggerURL)) memory.triggerURL = memory.triggerURL[0]
 					memory.actionSentence = getActionSentence2(memory.content.description, memory.context)
           logger.info(memory.actionSentence)
           data.memories = [memory]
