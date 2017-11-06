@@ -65,6 +65,10 @@ new Vue({
       })
       .then(x => x.json())
       .then(x => console.log("Notification request received by server", JSON.stringify(x)))
+    },
+    // Moving gDrive to backend - ASNOW
+    gDriveImport() {
+      importer.gDriveImport();
     }
   }
 })
