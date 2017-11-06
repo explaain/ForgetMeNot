@@ -13,7 +13,7 @@ const chatbot = require('../app/controller/chatbot');
 const properties = require('../app/config/properties.js');
 
 const tracer = require('tracer')
-const logger = tracer.colorConsole({level: 'info'});
+const logger = tracer.colorConsole({level: 'error'});
 
 // Algolia setup
 const AlgoliaSearch = require('algoliasearch');
