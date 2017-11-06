@@ -45,4 +45,15 @@ router.post('/import', function(req, res) {
 	});
 });
 
+router.post('/user', function(req, res) {
+  const data = req.body;
+  apiController.getUserData(data)
+  .then(function(results) {
+		res.status(200).send(results);
+	}).catch(function(e) {
+    console.error(e)
+		res.status(e.code).send(data)
+	});
+});
+
 module.exports = router;

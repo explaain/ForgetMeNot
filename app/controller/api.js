@@ -216,6 +216,25 @@ exports.acceptRequest = function(req) {
 	return d.promise
 }
 
+
+exports.getUserData = function(req) {
+  logger.trace('getUserData');
+	const d = Q.defer()
+  logger.info(req)
+  authenticateSender(req.user)
+  .then(res => { return checkPermissions(req.organisationID, req.user) })
+  .then(res => { return getUserData(req.organisationID, req.user) })
+	.then(function(result) {
+    logger.trace()
+    if (!result.statusCode) result.statusCode = 200 //temp
+		d.resolve(result)
+	}).catch(function(e) {
+		logger.error(e);
+		d.reject(e)
+	});
+	return d.promise
+}
+
 const authenticateSender = function(user) {
   return new Promise((resolve, reject) => {
     FirebaseAdmin.auth().verifyIdToken(user.idToken)
@@ -255,6 +274,28 @@ const checkPermissions = function(organisationID, user) {
     }).catch(function(error) {
       logger.error(error)
       const e = { statusCode: 400, message: '❌ 🔑  User permission checking failed' }
+      logger.error(e.message)
+      reject(e)
+    })
+  })
+}
+
+const getUserData = function(organisationID, user) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      organisationID: organisationID,
+      userID: user.uid
+    }
+    axios({
+      method: 'post',
+      url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/getUserData',
+      data: data
+    }).then(function(response) {
+      logger.info('👤  User Data Received!', response.data)
+      resolve(response.data)
+    }).catch(function(error) {
+      logger.error(error)
+      const e = { statusCode: 400, message: '❌ 🔑  User data retrieval failed' }
       logger.error(e.message)
       reject(e)
     })
@@ -729,7 +770,7 @@ const updateDb = function(sender, memory, requestData) {
     userID: requestData.user.uid,
     teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
   }
-  console.log('💎  Here\'s the data:', data);
+  console.log('💎  Here\'s the data:', data)
   axios({
     method: 'post',
     url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/saveCard',
