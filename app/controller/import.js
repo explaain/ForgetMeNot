@@ -1,32 +1,3 @@
-// const request = require('request');
-// const Q = require("q");
-// const path = require('path')
-// const extract = require('pdf-text-extract')
-//
-// const properties = require('../config/properties.js');
-//
-// const tracer = require('tracer')
-// const logger = tracer.colorConsole({level: 'info'});
-// // tracer.setLevel('warn');
-//
-//
-// exports.acceptRequest = function(requestData) {
-//   logger.trace();
-// 	const d = Q.defer()
-//
-//   const filePath = path.join(__dirname, 'test/data/multipage.pdf')
-//
-//   extract(filePath, { splitPages: false }, function (err, text) {
-//     if (err) {
-//       console.dir(err)
-//       d.reject(err)
-//       return
-//     }
-//     console.dir(text)
-//     d.resolve(text)
-//   })
-// 	return d.promise
-// }
 function doImport(){
 
   var fs = require('fs');
@@ -35,7 +6,7 @@ function doImport(){
   var googleAuth = require('google-auth-library');
 
   var SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly'];
-  var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH) + '/.credentials/';
+  var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE) + '/.credentials/';
   var TOKEN_PATH = TOKEN_DIR + 'drive-nodejs-quickstart.json';
 
   fs.readFile(__dirname + '/driveApiKey.json', function processClientSecrets(err, content) {
@@ -43,7 +14,6 @@ function doImport(){
       console.log('Error loading client secret file: ' + err);
       return;
     }
-    console.log(TOKEN_DIR)
     authorize(JSON.parse(content), importFiles);
   });
 
@@ -53,8 +23,6 @@ function doImport(){
     var redirectUrl = credentials.web.redirect_uris[0];
     var auth = new googleAuth();
     var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
-
-    // Check if we have previously stored a token.
     fs.readFile(TOKEN_PATH, function(err, token) {
       if (err) {
         getNewToken(oauth2Client, callback);
@@ -80,6 +48,7 @@ function doImport(){
       oauth2Client.getToken(code, function(err, token) {
         if (err) {
           console.log('Error while trying to retrieve access token', err);
+          //needs some error trap here for failed access
           return;
         }
         oauth2Client.credentials = token;
@@ -104,7 +73,6 @@ function doImport(){
     var service = google.drive('v3');
     service.files.list({
       auth: auth,
-      pageSize: 10,
       fields: "nextPageToken, files(id, name)"
     }, function(err, response) {
       if (err) {
@@ -115,14 +83,17 @@ function doImport(){
       if (files.length == 0) {
         console.log('No files found.');
       } else {
+        console.log("Importing files ...")
         for (var i = 0; i < files.length; i++) {
           var file = files[i];
+          // here would be a function like createCards(file);
           console.log('Imported file: ', file.name);
         }
       }
+        console.log('Files imported')
     });
   }
-  console.log('imported')
+
 }
 
 doImport();
