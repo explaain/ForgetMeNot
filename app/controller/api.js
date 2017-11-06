@@ -18,12 +18,82 @@ const schedule = require('node-schedule');
 const chrono = require('chrono-node')
 const Sherlock = require('sherlockjs');
 const crypto = require("crypto");
+const axios = require("axios");
+
+
+
+//
+// const data = {
+//   uid: 'GCyraAQwx2XsYeKYuYb01dU0SrF3',
+//   organisationID: 'explaain',
+//   objectID: 'abc',
+//   content: {
+//     description: 'Here\'s an updated card...!'
+//   },
+//   userID: '5Jp1wfbyPXdb3IuYUuFl',
+//   teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+// }
+// console.log('💎  Here\'s the data:', data);
+// axios({
+//   method: 'post',
+//   url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/saveCard',
+//   data: data
+// }).then(function(response) {
+//   console.log('📪  The response data!', response.data);
+// }).catch(function(e) {
+//   console.log('📛  Error!', e);
+// })
+
+
+// const data = {
+//   uid: 'GCyraAQwx2XsYeKYuYb01dU0SrF3',
+//   organisationID: 'explaain',
+//   userID: '2lal5bFVYIhc7bOFfBne',
+//   teamID: 'gqLdFXQ4Z9SAHfjd6IXX',
+//   role: 'manager'
+// }
+// console.log('💎  Here\'s the data:', data);
+// axios({
+//   method: 'post',
+//   url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/changeUserTeamRole',
+//   data: data
+// }).then(function(response) {
+//   console.log('📪  The response data!', response.data);
+// }).catch(function(e) {
+//   console.log('📛  Error!', e);
+// })
+
+// const data = {
+//   organisationID: 'explaain',
+//   cardIDs: [
+//     '631322580',
+//     '6iwfx12bVygBOD4orrbF',
+//     'abc',
+//   ],
+//   userID: 'vZweCaZEWlZPx0gpQn2b1B7DFAZ2_'
+// }
+// console.log('💎  Here\'s the data:', data);
+// axios({
+//   method: 'post',
+//   url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/getCards',
+//   data: data
+// }).then(function(response) {
+//   console.log('📪  The response data!', response.data);
+// }).catch(function(e) {
+//   console.log('📛  Error!', e);
+// })
+
+
+
 
 const properties = require('../config/properties.js');
 
 const tracer = require('tracer')
 const logger = tracer.colorConsole({level: 'info'});
 // tracer.setLevel('warn');
+
+// Firebase setup
+const FirebaseAdmin = require("firebase-admin")
 
 // Algolia setup
 const AlgoliaSearch = require('algoliasearch');
@@ -38,6 +108,28 @@ cloudinary.config({
   api_key: '645698655223266',
   api_secret: 'j2beHW2GZSpQ_zq_8bkmnWgW95k'
 });
+
+
+//
+// const data = {
+//   uid: 'GCyraAQwx2XsYeKYuYb01dU0SrF3',
+//   organisationID: 'explaain',
+//   objectID: 'abcde',
+//   content: {
+//     description: 'Here\'s an updated card...!'
+//   },
+//   userID: '5Jp1wfbyPXdb3IuYUuFl',
+//   teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+// }
+// AlgoliaClient.initIndex('Savvy').addObject(data, function(err, content) {
+//   if (err) {
+//     const e = { code: 500, message: '📛 🔁  Failed to sync with Algolia! (Update)' }
+//     console.log('📛 Error!', e.status, ':', e.message)
+//   } else {
+//     console.log('🔁  Synced with Algolia (Update)')
+//   }
+// })
+
 
 
 const rescheduleAllReminders = function() {
@@ -101,15 +193,18 @@ exports.deleteMemories = function(sender, objectID) {
 }
 
 
-exports.acceptRequest = function(requestData) {
+exports.acceptRequest = function(req) {
   logger.trace('acceptRequest');
 	const d = Q.defer()
-  logger.info(requestData)
-  if (!requestData.content) requestData.content = { description: requestData.description || requestData.text || requestData.sentence }
-  processNLP(requestData.sender, requestData.content.description, requestData.contexts)
-	.then(function(nlpData) {
-    requestData = combineObjects(requestData, nlpData)
-		return routeByIntent(requestData)
+  logger.info(req)
+  if (!req.content) req.content = { description: req.description || req.text || req.sentence }
+  if (!req.sender) req.sender = req.user ? req.user.uid : req.userID
+  authenticateSender(req.user)
+  .then(res => { return checkPermissions(req.organisationID, req.user) })
+  .then(res => { return processNLP(req.sender, req.content.description, req.contexts) })
+  .then(function(nlpData) {
+    req = combineObjects(req, nlpData)
+		return routeByIntent(req)
 	}).then(function(result) {
     logger.trace()
     if (!result.statusCode) result.statusCode = 200 //temp
@@ -121,6 +216,51 @@ exports.acceptRequest = function(requestData) {
 	return d.promise
 }
 
+const authenticateSender = function(user) {
+  return new Promise((resolve, reject) => {
+    FirebaseAdmin.auth().verifyIdToken(user.idToken)
+    .then(function(decodedToken) {
+      var uid = decodedToken.uid;
+      if (user.uid == uid) {
+        logger.info('🔑👤  User Authentication Succcessful!')
+        resolve()
+      } else {
+        const e = { statusCode: 400, message: '❌ 🔑  User UID doesn\'t match accessToken' }
+        logger.error(e.message)
+        reject(e)
+      }
+    }).catch(function(error) {
+      logger.error(error)
+      const e = { statusCode: 400, message: '❌ 🔑  User authentication failed: ' }
+      logger.error(e.message)
+      reject(e)
+    })
+  })
+}
+
+const checkPermissions = function(organisationID, user) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      organisationID: organisationID,
+      userID: user.uid
+    }
+    axios({
+      method: 'post',
+      url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/checkPermissions',
+      data: data
+    }).then(function(response) {
+      logger.info('🔑🖇  User Permissions Check Succcessful!')
+      // console.log('📪  The response data!', response.data)
+      resolve()
+    }).catch(function(error) {
+      logger.error(error)
+      const e = { statusCode: 400, message: '❌ 🔑  User permission checking failed' }
+      logger.error(e.message)
+      reject(e)
+    })
+  })
+}
+
 const routeByIntent = function(requestData) {
 	logger.trace(routeByIntent)
 	const d = Q.defer()
@@ -129,7 +269,7 @@ const routeByIntent = function(requestData) {
   requestData.generalIntent = getGeneralIntent(requestData.intent)
   if (requestData.generalIntent == 'write') {
     memory = getWrittenMemory(requestData)
-    logger.info(memory)
+    // logger.info(memory)
   }
   if (requestData.lastAction) var lastActionMemory = getWrittenMemory(requestData.lastAction.requestData);
   // if (requestData.intent == 'provideURL') requestData.intent = 'setTask.URL'
@@ -148,8 +288,8 @@ const routeByIntent = function(requestData) {
 			break;
 
 		case "storeMemory":
-      logger.info(memory)
-			storeMemory(memory)
+      // logger.info(memory)
+			storeMemory(memory, requestData)
 			.then(function() {
 				d.resolve(data)
 			}).catch(function(e) {
@@ -414,11 +554,14 @@ const recallMemory = function(requestData) {
 
 
 // Seems like this function is no longer necessary?
-const storeMemory = function(memory) {
-	logger.trace(storeMemory);
+const storeMemory = function(memory, requestData) {
+	logger.trace(storeMemory)
+	logger.trace(memory)
+	logger.trace(requestData)
 	const d = Q.defer()
 	try {
-    saveMemory(memory.sender, memory)
+    console.log(requestData);
+    saveMemory(memory.sender, memory, requestData)
     .then(function(memory) {
       d.resolve(memory);
     }).catch(function(e) {
@@ -435,32 +578,51 @@ const storeMemory = function(memory) {
 
 
 
-const saveMemory = function(sender, m) {
+const saveMemory = function(sender, m, requestData) {
 	logger.trace()
 	const d = Q.defer()
 	m.hasAttachments = !!(m.attachments) /* @TODO: investigate whether brackets are needed */
-  logger.info(m)
-	fetchUserData(sender)
-	.then(function(content) {
-		m.userID = content ? content.uploadTo || sender : sender;
-		const searchParams = {
-			query: m.content.description.substring(0, 500), // Only sends Algolia the first 511 characters as it can't hanlogger.tracee more than that
-			filters: 'userID: ' + m.userID,
-			getRankingInfo: true
-		};
-		return searchDb(AlgoliaIndex, searchParams)
-	// }).then(function() {
-	// 	return m.hasAttachments ? sendAttachmentUpload(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
-}).then(function(results) {
-		if (m.hasAttachments && results[0] && results[0].value.attachment_id) m.attachments[0].attachment_id = results[0].value.attachment_id;
+  // logger.info(m)
+  var author
+  const memoryExists = !!m.objectID
+  fetchUserData(sender)
+  .then(function(res) {
+    author = res
+  //   return memoryExists ? getDbObject(AlgoliaIndex, m.objectID) : Q.fcall(function() {return null})
+  // }).then(function(existingCard) {
+		m.userID = author ? author.uploadTo || sender : sender;
+  //   // if (author.teams) {
+  //   //   if (!memoryExists) {
+  //   //     m.teams = author.teams.map(function(team) {
+  //   //       return team.teamID
+  //   //     })
+  //   //   } else {
+  //   //     if (author.teams.filter(function(team) { return team.role == 'manager'}).length == 0 ) {
+  //   //       m.pending = [m.content]
+  //   //       m.content = existingCard ? existingCard.content : {}
+  //   //     }
+  //   //   }
+  //   // }
+  //   m.expiryDate = new Date().setMonth(new Date().getMonth() + 3)
+
+	// 	const searchParams = {
+	// 		query: m.content.description.substring(0, 500), // Only sends Algolia the first 511 characters as it can't hanlogger.tracee more than that
+	// 		filters: 'userID: ' + m.userID,
+	// 		getRankingInfo: true
+	// 	};
+	// 	return searchDb(AlgoliaIndex, searchParams)
+	// // }).then(function() {
+	// // 	return m.hasAttachments ? sendAttachmentUpload(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
+  // }).then(function(results) {
+	// 	if (m.hasAttachments && results[0] && results[0].value.attachment_id) m.attachments[0].attachment_id = results[0].value.attachment_id;
 		return m.hasAttachments && m.attachments[0].type=="image" ? backupAttachment(sender, m.attachments[0].type, m.attachments[0].url) : Q.fcall(function() {return null});
 	}).then(function(url) {
 		if (m.hasAttachments && url) m.attachments[0].url = url;
-    logger.info('🔆 🔆 🔆 ', m)
-		if (m.objectID) {
-			return updateDb(sender, m)
+		if (memoryExists) {
+      // logger.info(m)
+			return updateDb(sender, m, requestData)
 		} else {
-			return saveToDb(sender, m)
+			return saveToDb(sender, m, requestData)
 		}
 	}).then(function(m) {
 		d.resolve(m)
@@ -504,39 +666,81 @@ const searchDb = function(index, params) {
 	return d.promise;
 }
 
-const saveToDb = function(sender, memory) {
+const saveToDb = function(sender, memory, requestData) {
   /* Temporarily replacing all Slack userIDs with ACME userID */ if(memory.userID.length < 10) memory.userID = '101118387301286232222'
   logger.trace()
 	const d = Q.defer();
 	memory.dateCreated = Date.now()
   memory.dateUpdated = Date.now()
-	AlgoliaIndex.addObject(memory, function(err, content){
-		if (err) {
-			// sendTextMessage(id, "I couldn't remember that");
-      logger.error(err);
-			d.reject(err);
-		} else {
-			logger.trace('User memory created successfully!');
-			memory.objectID = content.objectID
-			d.resolve(memory);
-		}
-	});
+	// AlgoliaIndex.addObject(memory, function(err, content){
+	// 	if (err) {
+	// 		// sendTextMessage(id, "I couldn't remember that");
+  //     logger.error(err);
+	// 		d.reject(err);
+	// 	} else {
+	// 		logger.trace('User memory created successfully!');
+	// 		memory.objectID = content.objectID
+	// 		d.resolve(memory);
+	// 	}
+	// });
+
+  const data = {
+    organisationID: 'explaain',
+    objectID: memory.objectID || null,
+    content: memory.content,
+    userID: requestData.user.uid,
+    teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+  }
+  console.log('💎  Here\'s the data:', data)
+  axios({
+    method: 'post',
+    url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/saveCard',
+    data: data
+  }).then(function(response) {
+    console.log('📪  The response data!', response.data)
+    memory.objectID = response.data.objectID
+    d.resolve()
+  }).catch(function(e) {
+    console.log('📛  Error!', e);
+    d.reject()
+  })
 	return d.promise;
 }
-const updateDb = function(sender, memory) {
+const updateDb = function(sender, memory, requestData) {
   /* Temporarily replacing all Slack userIDs with ACME userID */ if(memory.userID.length < 10) memory.userID = '101118387301286232222'
 	logger.trace()
 	const d = Q.defer();
 	memory.dateUpdated = Date.now()
-	AlgoliaIndex.saveObject(memory, function(err, content){
-		if (err) {
-			logger.error(err);
-			d.reject(err);
-		} else {
-			logger.trace('User memory updated successfully!');
-			d.resolve(memory);
-		}
-	});
+	// AlgoliaIndex.saveObject(memory, function(err, content){
+	// 	if (err) {
+	// 		logger.error(err);
+	// 		d.reject(err);
+	// 	} else {
+	// 		logger.trace('User memory updated successfully!');
+	// 		d.resolve(memory);
+	// 	}
+	// });
+
+  console.log(requestData);
+  const data = {
+    organisationID: 'explaain',
+    objectID: memory.objectID || null,
+    content: memory.content,
+    userID: requestData.user.uid,
+    teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+  }
+  console.log('💎  Here\'s the data:', data);
+  axios({
+    method: 'post',
+    url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/saveCard',
+    data: data
+  }).then(function(response) {
+    console.log('📪  The response data!', response.data);
+    d.resolve()
+  }).catch(function(e) {
+    console.log('📛  Error!', e);
+    d.reject()
+  })
 	return d.promise;
 }
 const deleteFromDb = function(sender, objectID) {
@@ -915,7 +1119,7 @@ function extractAllContext(e) {
 
 const getWrittenMemory = function(requestData) {
   var memory = requestData.parameters ? extractAllContext(requestData.parameters) : {}
-  logger.info('❇️ ❇️ ❇️ ' + requestData.intent)
+  // logger.info('❇️ ❇️ ❇️ ' + requestData.intent)
   memory.intent = requestData.intent;
   memory.sender = requestData.sender;
   memory.content = requestData.content || {
@@ -927,7 +1131,7 @@ const getWrittenMemory = function(requestData) {
   memory.attachments = requestData.attachments;
   memory.triggerURL = requestData.triggerURL;
   if (requestData.objectID) memory.objectID = requestData.objectID;
-  logger.info(memory);
+  // logger.info(memory);
   return memory
 }
 
