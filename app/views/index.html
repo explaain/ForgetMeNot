@@ -17,8 +17,6 @@
       <br>
       <input type='email' v-model='email'/>
       <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
-      <button v-on:click='gDriveImport()' :disabled="pushEnabled || pushToken">Get new cards</button>
-
     </center>
     <script src="client.js"></script>
   </body>

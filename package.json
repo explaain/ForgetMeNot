@@ -6,7 +6,6 @@
     "start": "node ./bin/www",
     "test": "ALGOLIA_INDEX=ForgetMeNot_Context_Test mocha",
     "test-single": "ALGOLIA_INDEX=ForgetMeNot_Context_Test mocha --grep sequences",
-    "import-test": "node ./app/components/import.js"
   },
   "dependencies": {
     "@google/maps": "^0.3.1",
