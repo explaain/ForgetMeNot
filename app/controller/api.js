@@ -109,6 +109,28 @@ cloudinary.config({
   api_secret: 'j2beHW2GZSpQ_zq_8bkmnWgW95k'
 });
 
+// grab the Mixpanel factory
+var Mixpanel = require('mixpanel');
+// create an instance of the mixpanel client
+var mixpanel = Mixpanel.init('e3b4939c1ae819d65712679199dfce7e');
+// // initialize mixpanel client configured to communicate over https
+// var mixpanel = Mixpanel.init('6fd9434dba686db2d1ab66b4462a3a67', {
+//     protocol: 'https'
+// });
+const track = function (name, data) {
+  return new Promise(function(resolve, reject) {
+    console.log('👣  Tracking ' + name + ' event:', data)
+    mixpanel.track(name, data)
+    .then(res => {
+      console.log(res)
+      resolve(res)
+    }).catch(e => {
+      console.log(e)
+      reject(e)
+    })
+  })
+}
+
 
 //
 // const data = {
@@ -740,6 +762,10 @@ const saveToDb = function(sender, memory, requestData) {
   }).then(function(response) {
     console.log('📪  The response data!', response.data)
     memory.objectID = response.data.objectID
+    track('Card Saved', {
+      card: memory,
+      env: 'Local'
+    })
     d.resolve()
   }).catch(function(e) {
     console.log('📛  Error!', e);
