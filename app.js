@@ -39,7 +39,7 @@ app.use('/api', api);
 app.use('/users', users);
 app.use('/webhook', webhooks);
 app.use('/notify', notifications)
-app.use('/authorise', authorisations)
+app.use('/authorisations', authorisations)
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

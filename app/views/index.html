@@ -19,9 +19,10 @@
       <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
     </center>
 
-    <form method="get" target="/authorise">
-      <input type="submit" name="authorise" value="Auth">
-    </form>
+    <a href="./authorisations/add">Add New Google Drive Source</a><br /> (saves token to db and processes files)
+    <br />
+    <a href="./authorisations/update">Refresh Files</a><br />  (processes files from saved source)
+
     <script src="client.js"></script>
   </body>
 </html>
