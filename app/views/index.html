@@ -18,6 +18,10 @@
       <input type='email' v-model='email'/>
       <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
     </center>
+
+    <form method="get" target="/authorise">
+      <input type="submit" name="authorise" value="Auth">
+    </form>
     <script src="client.js"></script>
   </body>
 </html>

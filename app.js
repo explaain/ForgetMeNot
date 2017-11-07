@@ -17,7 +17,8 @@ var apiController = require('./app/controller/chatbot');
 var api = require('./app/routes/api');
 var users = require('./app/routes/users');
 var webhooks = require('./app/routes/webhooks');
-var notifications = require('./app/routes/notifications')
+var notifications = require('./app/routes/notifications');
+var authorisations = require('./app/routes/authorisations');
 
 var app = express();
 
@@ -38,6 +39,7 @@ app.use('/api', api);
 app.use('/users', users);
 app.use('/webhook', webhooks);
 app.use('/notify', notifications)
+app.use('/authorise', authorisations)
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

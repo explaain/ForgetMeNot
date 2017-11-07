@@ -23,50 +23,15 @@ function doImport(){
     var redirectUrl = credentials.web.redirect_uris[0];
     var auth = new googleAuth();
     var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
-    fs.readFile(TOKEN_PATH, function(err, token) {
-      if (err) {
-        getNewToken(oauth2Client, callback);
-      } else {
-        oauth2Client.credentials = JSON.parse(token);
-        callback(oauth2Client);
-      }
-    });
-  }
-
-  function getNewToken(oauth2Client, callback) {
-    var authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: SCOPES
-    });
-    console.log('Authorize this app by visiting this url: ', authUrl);
-    var rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    rl.question('Enter the code from that page here: ', function(code) {
-      rl.close();
-      oauth2Client.getToken(code, function(err, token) {
-        if (err) {
-          console.log('Error while trying to retrieve access token', err);
-          //needs some error trap here for failed access
-          return;
-        }
-        oauth2Client.credentials = token;
-        storeToken(token);
-        callback(oauth2Client);
-      });
-    });
-  }
-  function storeToken(token) {
-    try {
-      fs.mkdirSync(TOKEN_DIR);
-    } catch (err) {
-      if (err.code != 'EEXIST') {
-        throw err;
-      }
+    // real token to be extracted from firebase
+    var token = {
+      access_token: 'ya29.Glv8BHDz3qdkIRc2wp9ymzMF6jKsZbkpXj9o3RYCQUhIkeWpxLiozd259ndJ1fYxs3htWLdMqpOkmBHfYyFV-4UaejxQ5b5_GTbHcw2TAtbn7GXJMwfjj09Q03Ew',
+      refresh_token: '1/FMh-eGsrnO4S5vgsZ3ayxq9S3AhHBJcIXe7lchx0rbY',
+      token_type: 'Bearer',
+      expiry_date: 1509985260609
     }
-    fs.writeFile(TOKEN_PATH, JSON.stringify(token));
-    console.log('Token stored to ' + TOKEN_PATH);
+    oauth2Client.credentials = token;
+    callback(oauth2Client);
   }
 
   function importFiles(auth) {
