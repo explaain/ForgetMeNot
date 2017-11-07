@@ -751,8 +751,7 @@ const saveToDb = function(sender, memory, requestData) {
     organisationID: 'explaain',
     objectID: memory.objectID || null,
     content: memory.content,
-    userID: requestData.user.uid,
-    teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+    userID: requestData.user.uid
   }
   console.log('💎  Here\'s the data:', data)
   axios({
@@ -793,8 +792,7 @@ const updateDb = function(sender, memory, requestData) {
     organisationID: 'explaain',
     objectID: memory.objectID || null,
     content: memory.content,
-    userID: requestData.user.uid,
-    teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+    userID: requestData.user.uid
   }
   console.log('💎  Here\'s the data:', data)
   axios({
