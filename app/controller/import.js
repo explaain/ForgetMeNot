@@ -1,26 +1,24 @@
-function doImport(){
+function updateSourceFiles(){
 
-  var fs = require('fs');
-  var readline = require('readline');
   var google = require('googleapis');
   var googleAuth = require('google-auth-library');
 
-  var SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly'];
-  var TOKEN_DIR = (process.env.HOME || process.env.HOMEPATH || process.env.USERPROFILE) + '/.credentials/';
-  var TOKEN_PATH = TOKEN_DIR + 'drive-nodejs-quickstart.json';
+  authorize(importFiles);
 
-  fs.readFile(__dirname + '/driveApiKey.json', function processClientSecrets(err, content) {
-    if (err) {
-      console.log('Error loading client secret file: ' + err);
-      return;
+  function authorize(callback) {
+    // real credentials to be extracted from firebase
+    var credentials = {
+      client_id: '704974264220-r3j760e70qgsea3r143apoc4o6nt5ha2.apps.googleusercontent.com',
+      project_id: 'savvy-96d8b',
+      auth_uri: 'https://accounts.google.com/o/oauth2/auth',
+      token_uri: 'https://accounts.google.com/o/oauth2/token',
+      auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
+      client_secret: 'lGE5esfXpdB6y7KkVNUezfas',
+      redirect_uris: [ 'http://localhost:3000', 'https://savvy.eu.ngrok.io' ]
     }
-    authorize(JSON.parse(content), importFiles);
-  });
-
-  function authorize(credentials, callback) {
-    var clientSecret = credentials.web.client_secret;
-    var clientId = credentials.web.client_id;
-    var redirectUrl = credentials.web.redirect_uris[0];
+    var clientSecret = credentials.client_secret;
+    var clientId = credentials.client_id;
+    var redirectUrl = credentials.redirect_uris[0];
     var auth = new googleAuth();
     var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
     // real token to be extracted from firebase
@@ -61,4 +59,4 @@ function doImport(){
 
 }
 
-doImport();
+updateSourceFiles();
