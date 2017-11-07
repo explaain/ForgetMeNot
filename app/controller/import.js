@@ -17,7 +17,7 @@ var redirectUrl = credentials.redirect_uris[0];
 
 function updateSourceFiles(token){
 
-  // will need firebase function like getToken(source), reading from json file temporarily
+  // will need firebase function like getSavedToken(source), reading from json file temporarily
   fs.readFile('app/controller/driveToken.json', function processClientSecrets(err, content) {
     if (err) {
       console.log('Error loading client secret file: ' + err);
@@ -41,6 +41,7 @@ function updateSourceFiles(token){
     }, function(err, response) {
       if (err) {
         console.log('The API returned an error: ' + err);
+        //needs some error trap here for failed access
         return;
       }
       var files = response.files;
@@ -50,14 +51,13 @@ function updateSourceFiles(token){
         console.log("Importing files ...")
         for (var i = 0; i < files.length; i++) {
           var file = files[i];
-          // here would be a function like createCards(file);
+          // here would be a function like createAndUpdateCards(file);
           console.log('Imported file: ', file.name);
         }
       }
       console.log('Files imported')
     });
   }
-
 }
 
 function getNewToken() {
@@ -65,7 +65,7 @@ function getNewToken() {
   var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
   var authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    scope: ['https://www.googleapis.com/auth/drive.metadata.readonly'],
+    scope: ['https://www.googleapis.com/auth/drive.readonly'],
     prompt: "consent"
   });
   console.log(authUrl)
