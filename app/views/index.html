@@ -17,11 +17,12 @@
       <br>
       <input type='email' v-model='email'/>
       <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
-    </center>
-
+      <br />
+      <br />
     <a href="./authorisations/add">Add New Google Drive Source</a><br /> (saves token to db and processes files)
     <br />
     <a href="./authorisations/update">Refresh Files</a><br />  (processes files from saved source)
+  </center>
 
     <script src="client.js"></script>
   </body>

@@ -8,7 +8,6 @@ router.get('/update', function(req, res){
 });
 
 router.get('/add', function(req, res){
-  console.log('add source');
   res.redirect(importer.getNewToken());
 });
 

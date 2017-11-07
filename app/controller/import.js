@@ -1,7 +1,7 @@
 var google = require('googleapis');
 var googleAuth = require('google-auth-library');
 var fs = require('fs')
-// real credentials to be extracted from firebase
+// needs firebase function like getCredentials();
 var credentials = {
   client_id: '704974264220-r3j760e70qgsea3r143apoc4o6nt5ha2.apps.googleusercontent.com',
   project_id: 'savvy-96d8b',
@@ -17,6 +17,7 @@ var redirectUrl = credentials.redirect_uris[0];
 
 function updateSourceFiles(token){
 
+  // will need firebase function like getToken(source), reading from json file temporarily
   fs.readFile('app/controller/driveToken.json', function processClientSecrets(err, content) {
     if (err) {
       console.log('Error loading client secret file: ' + err);
@@ -24,7 +25,7 @@ function updateSourceFiles(token){
     }
     authorize(JSON.parse(content), importFiles);
   });
-  
+
   function authorize(token, callback) {
     var auth = new googleAuth();
     var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
@@ -85,7 +86,7 @@ function exchangeToken(code){
         return;
       }
       oauth2Client.credentials = token;
-      // needs function to store token to firebase here, saving to local json temporarily
+      // needs firebase function like saveToken(source, token), saving to local json temporarily
       fs.writeFile('app/controller/driveToken.json', JSON.stringify(token), function(err){
         if (err) {
           res.status(500).jsonp({ error: 'Failed to write file' });
