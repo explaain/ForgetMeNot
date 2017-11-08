@@ -49,14 +49,14 @@ function updateSourceFiles(token){
       if (files.length == 0) {
         console.log('No files found.');
       } else {
-        console.log("Importing files ...")
+        console.log("Importing Google Drive files ...")
         for (var i = 0; i < files.length; i++) {
           var file = files[i];
           // here would be a function like createAndUpdateCards(file);
           console.log('Imported file: ', file.name);
         }
       }
-      console.log('Files imported')
+      console.log(files.length + ' Google Drive files imported')
     });
   }
 }

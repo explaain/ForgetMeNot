@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <link rel="manifest" href="manifest.json">
   <title>FMN Push Notification demo</title>
-  <style>* { zoom: 1.2; font-family: -apple-system, BlinkMacSystemFont, 'avenir next', avenir, helvetica, 'helvetica neue', ubuntu, roboto, noto, 'segoe ui', arial, sans-serif; }</style>
+  <style>* { zoom: 1.05; font-family: -apple-system, BlinkMacSystemFont, 'avenir next', avenir, helvetica, 'helvetica neue', ubuntu, roboto, noto, 'segoe ui', arial, sans-serif; }</style>
   <script src="https://www.gstatic.com/firebasejs/4.5.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/4.5.0/firebase-messaging.js"></script>
   <script src="https://unpkg.com/vue"></script>
@@ -18,14 +18,27 @@
     <input type='email' v-model='email'/>
     <button v-on:click='requestPermission("email")' :disabled="!email">Subscribe to emails</button>
     <br />
-    <h3>Google Drive API testing</h3>
-    <a href="./authorisations/add">Add New Google Drive</a>
+    <div>
+    <h3>Source Testing</h3>
+    <a href="./authorisations/add-gdrive">Add New Google Drive</a>
     <br />
+    <br />
+    <strong>Add New Confluence</strong>
+    <br />
+    <form method="get" action="/authorisations/save-confluence">
+      Username  <input type="text" name="username" placeholder="admin"><br />
+      Password <input type="password" name="password"><br />
+      Site URL  <input type="url" name="baseUrl" placeholder="https://savvy-development.atlassian.net">
+      <i> ie https://savvy-development.atlassian.net</i><br />
+      <input type="submit">
+    </form>
     (saves authorisation to db and processes files)
+    <br />
     <br />
     <a href="./authorisations/update">Refresh Files</a>
     <br />
     (processes files from saved source)
+  </div>
   </center>
 
   <script src="client.js"></script>
