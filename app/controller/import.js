@@ -20,6 +20,7 @@ function updateSourceFiles(token){
   // will need firebase function like getSavedToken(source), reading from json file temporarily
   fs.readFile('app/controller/driveToken.json', function processClientSecrets(err, content) {
     if (err) {
+      // This would be if unable to retrieve from firebase, n/a
       console.log('Error loading client secret file: ' + err);
       return;
     }
@@ -60,7 +61,7 @@ function updateSourceFiles(token){
   }
 }
 
-function getNewToken() {
+function getCode() {
   var auth = new googleAuth();
   var oauth2Client = new auth.OAuth2(clientId, clientSecret, redirectUrl);
   var authUrl = oauth2Client.generateAuthUrl({
@@ -99,5 +100,5 @@ function exchangeToken(code){
 };
 
 exports.updateSourceFiles = updateSourceFiles;
-exports.getNewToken = getNewToken;
+exports.getCode = getCode;
 exports.exchangeToken = exchangeToken;
