@@ -314,6 +314,10 @@ const getUserData = function(organisationID, user) {
       data: data
     }).then(function(response) {
       logger.info('👤  User Data Received!', response.data)
+      track('User logged in', {
+        env: 'Local',
+        user_id: data.userID
+      })
       resolve(response.data)
     }).catch(function(error) {
       logger.error(error)
@@ -711,7 +715,7 @@ const getDbObject = function(index, objectID, returnArray) {
 }
 exports.getDbObject = getDbObject;
 
-const searchDb = function(index, params) {
+const searchDb = function(index, params, userID) {
 	logger.trace()
 	const d = Q.defer();
 	index.search(params, function searchDone(err, content) { /* @TODO: investigate whether function name is needed */
@@ -719,6 +723,7 @@ const searchDb = function(index, params) {
       logger.error(err);
 			d.reject(err)
 		} else {
+
 			fetchListItemCards(content.hits)
 			.then(function() {
         logger.trace()
@@ -764,7 +769,8 @@ const saveToDb = function(sender, memory, requestData) {
     memory.objectID = response.data.objectID
     track('Card Saved', {
       card: memory,
-      env: 'Local'
+      env: 'Local',
+      user_id: data.userID
     })
     d.resolve()
   }).catch(function(e) {
@@ -803,6 +809,10 @@ const updateDb = function(sender, memory, requestData) {
     data: data
   }).then(function(response) {
     console.log('📪  The response data!', response.data);
+    track('Card Updated', {
+      card: memory,
+      env: 'Local'
+    })
     d.resolve()
   }).catch(function(e) {
     console.log('📛  Error!', e);
@@ -821,6 +831,10 @@ const deleteFromDb = function(sender, objectID) {
 			d.reject(err);
 		} else {
 			logger.trace('User memory deleted successfully!');
+      track('Card Deleted', {
+        card: 'memory',
+        env: 'Local'
+      })
 			d.resolve();
 		}
 	});
