@@ -240,7 +240,6 @@ exports.getUserData = function(req) {
   logger.trace('getUserData');
 	const d = Q.defer()
   logger.info(req)
-  fetchMixpanelData()
   authenticateSender(req.user)
   .then(res => { return checkPermissions(req.organisationID, req.user) })
   .then(res => { return getUserData(req.organisationID, req.user) })
@@ -261,9 +260,10 @@ exports.fetchMixpanelData = function(data) {
         event = data.event
   // @TODO: Put these inside the get request URL
   return new Promise((resolve, reject) => {
-    axios.get('https://4911948a523883a90eba70f3a70d578b@mixpanel.com/api/2.0/segmentation?from_date=2017-11-05&to_date=2017-11-12&event=Card%20Saved')
+    axios.get('https://4911948a523883a90eba70f3a70d578b@mixpanel.com/api/2.0/segmentation?from_date='+start+'&to_date='+end+'&event='+event)
     .then(function(response) {
-      console.log(response.data);
+      // console.log(response.data);
+      console.log(response.data.data.values);
     })
     .catch(function(error) {
       console.log(error);

@@ -16,3 +16,5 @@ router.post('/fetch', function(req, res) {
 		res.status(e.code).send(data)
 	})
 })
+
+module.exports = router;
