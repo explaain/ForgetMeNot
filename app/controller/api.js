@@ -173,9 +173,6 @@ const rescheduleAllReminders = function() {
 	});
 }
 
-
-
-
 var clientMessageFunction;
 exports.acceptClientMessageFunction = function(messageFunction) {
 	clientMessageFunction = messageFunction
@@ -243,6 +240,7 @@ exports.getUserData = function(req) {
   logger.trace('getUserData');
 	const d = Q.defer()
   logger.info(req)
+  fetchMixpanelData()
   authenticateSender(req.user)
   .then(res => { return checkPermissions(req.organisationID, req.user) })
   .then(res => { return getUserData(req.organisationID, req.user) })
@@ -255,6 +253,18 @@ exports.getUserData = function(req) {
 		d.reject(e)
 	});
 	return d.promise
+}
+
+const fetchMixpanelData = function(start, end, event) {
+  return new Promise((resolve, reject) => {
+    axios.get('https://4911948a523883a90eba70f3a70d578b@mixpanel.com/api/2.0/segmentation?from_date=2017-11-05&to_date=2017-11-12&event=Card%20Saved')
+    .then(function(response) {
+      console.log(response.data);
+    })
+    .catch(function(error) {
+      console.log(error);
+    })
+  })
 }
 
 const authenticateSender = function(user) {
@@ -1246,6 +1256,5 @@ const getGeneralIntent = function(intent) {
     return 'other'
   }
 }
-
 
 rescheduleAllReminders();
