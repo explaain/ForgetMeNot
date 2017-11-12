@@ -9,6 +9,8 @@ router.post('/fetch', function(req, res) {
   const data = req.body
   apiController.fetchMixpanelData(data)
   .then(function(results) {
+    console.log('results');
+    console.log(results);
 		res.status(200).send(results);
 	}).catch(function(e) {
     console.log(req.body);

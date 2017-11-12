@@ -258,15 +258,16 @@ exports.fetchMixpanelData = function(data) {
   const start = data.start,
         end = data.end,
         event = data.event
-  // @TODO: Put these inside the get request URL
   return new Promise((resolve, reject) => {
     axios.get('https://4911948a523883a90eba70f3a70d578b@mixpanel.com/api/2.0/segmentation?from_date='+start+'&to_date='+end+'&event='+event)
     .then(function(response) {
       // console.log(response.data);
       console.log(response.data.data.values);
+      resolve(response.data.data.values)
     })
     .catch(function(error) {
       console.log(error);
+      reject(error)
     })
   })
 }
