@@ -329,7 +329,7 @@ const getUserData = function(organisationID, user) {
       data: data
     }).then(function(response) {
       logger.info('👤  User Data Received!', response.data)
-      track('User logged in', {
+      track('User data fetched', {
         env: 'Local',
         user_id: data.userID
       })
@@ -738,7 +738,6 @@ const searchDb = function(index, params, userID) {
       logger.error(err);
 			d.reject(err)
 		} else {
-
 			fetchListItemCards(content.hits)
 			.then(function() {
         logger.trace()
@@ -784,6 +783,7 @@ const saveToDb = function(sender, memory, requestData) {
     memory.objectID = response.data.objectID
     track('Card Saved', {
       card: memory,
+      assigned_to_team: data.teamID,
       env: 'Local',
       user_id: data.userID
     })
@@ -815,7 +815,7 @@ const updateDb = function(sender, memory, requestData) {
     objectID: memory.objectID || null,
     content: memory.content,
     userID: requestData.user.uid,
-    teamID: 'gqLdFXQ4Z9SAHfjd6IXX'
+    teamID: 'gqLdFXQ4Z9SAHfjd6IXX',
   }
   console.log('💎  Here\'s the data:', data)
   axios({
@@ -826,7 +826,9 @@ const updateDb = function(sender, memory, requestData) {
     console.log('📪  The response data!', response.data);
     track('Card Updated', {
       card: memory,
-      env: 'Local'
+      env: 'Local',
+      user_id: data.userID,
+      assigned_to_team: data.teamID
     })
     d.resolve()
   }).catch(function(e) {
@@ -848,7 +850,8 @@ const deleteFromDb = function(sender, objectID) {
 			logger.trace('User memory deleted successfully!');
       track('Card Deleted', {
         card: 'memory',
-        env: 'Local'
+        env: 'Local',
+        deleted_by: sender
       })
 			d.resolve();
 		}
@@ -1039,6 +1042,11 @@ const fetchListItemCards = function(cards) {
         getDbObject(AlgoliaIndex, key)
         .then(function(content) {
           card.listCards[key] = content;
+          track('Fetch Cards', {
+            env: 'Local',
+            fetch_key: key,
+            search_results: Object.keys(card.listCards).length
+          })
           p.resolve(content);
         }).catch(function(e) {
           logger.error(e);
