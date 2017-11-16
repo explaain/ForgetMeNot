@@ -257,6 +257,24 @@ exports.getUserData = function(req) {
 	return d.promise
 }
 
+exports.addUserToOrganisation = function(req) {
+  logger.trace('getUserData');
+	const d = Q.defer()
+  logger.info(req)
+  authenticateSender(req.user)
+  // .then(res => { return checkPermissions(req.organisationID, req.user) })
+  .then(res => { return addUserToOrganisation(req.organisationID, req.user, req.verifiedEmails) })
+	.then(function(result) {
+    logger.trace()
+    if (!result.statusCode) result.statusCode = 200 //temp
+		d.resolve(result)
+	}).catch(function(e) {
+		logger.error(e);
+		d.reject(e)
+	});
+	return d.promise
+}
+
 const authenticateSender = function(user) {
   return new Promise((resolve, reject) => {
     FirebaseAdmin.auth().verifyIdToken(user.idToken)
@@ -318,6 +336,33 @@ const getUserData = function(organisationID, user) {
     }).catch(function(error) {
       logger.error(error)
       const e = { statusCode: 400, message: '❌ 🔑  User data retrieval failed' }
+      logger.error(e.message)
+      reject(e)
+    })
+  })
+}
+
+const addUserToOrganisation = function(organisationID, user, verifiedEmails) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      organisationID: organisationID,
+      userID: user.uid,
+      verifiedEmails: verifiedEmails
+    }
+    axios({
+      method: 'post',
+      url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/addUserToOrganisation',
+      data: data
+    }).then(function(response) {
+      logger.info('👤  User Joined and User Data Received!', response.data)
+      track('User joined', {
+        env: 'Local',
+        user_id: data.userID
+      })
+      resolve(response.data)
+    }).catch(function(error) {
+      logger.error(error)
+      const e = { statusCode: 400, message: '❌ 🔑  User joining and getting data failed' }
       logger.error(e.message)
       reject(e)
     })

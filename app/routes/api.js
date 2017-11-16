@@ -56,4 +56,15 @@ router.post('/user', function(req, res) {
 	});
 });
 
+router.post('/user/add', function(req, res) {
+  const data = req.body;
+  apiController.addUserToOrganisation(data)
+  .then(function(results) {
+		res.status(200).send(results);
+	}).catch(function(e) {
+    console.error(e)
+		res.status(e.code).send(data)
+	});
+});
+
 module.exports = router;
