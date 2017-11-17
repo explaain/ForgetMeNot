@@ -257,6 +257,28 @@ exports.getUserData = function(req) {
 	return d.promise
 }
 
+exports.getUserTeamDetails = function(req) {
+  try {
+    logger.trace('getUserData');
+    const d = Q.defer()
+    logger.info(req)
+    authenticateSender(req.user)
+    // .then(res => { return checkPermissions(req.organisationID, req.user) })
+    .then(res => { return getUserTeamDetails(req.organisationID, req.user) })
+    .then(function(result) {
+      logger.trace()
+      if (!result.statusCode) result.statusCode = 200 //temp
+      d.resolve(result)
+    }).catch(function(e) {
+      logger.error(e);
+      d.reject(e)
+    });
+    return d.promise
+  } catch (e) {
+    console.log(e)
+  }
+}
+
 exports.addUserToOrganisation = function(req) {
   logger.trace('getUserData');
 	const d = Q.defer()
@@ -336,6 +358,28 @@ const getUserData = function(organisationID, user) {
     }).catch(function(error) {
       logger.error(error)
       const e = { statusCode: 400, message: '❌ 🔑  User data retrieval failed' }
+      logger.error(e.message)
+      reject(e)
+    })
+  })
+}
+
+const getUserTeamDetails = function(organisationID, user) {
+  return new Promise((resolve, reject) => {
+    const data = {
+      organisationID: organisationID,
+      userID: user.uid
+    }
+    axios({
+      method: 'post',
+      url: 'https://us-central1-savvy-96d8b.cloudfunctions.net/getUserTeamDetails',
+      data: data
+    }).then(function(response) {
+      logger.info('👤  User\'s Team Details Received!', response.data)
+      resolve(response.data)
+    }).catch(function(error) {
+      logger.error(error)
+      const e = { statusCode: 400, message: '❌ 🔑  User team details retrieval failed' }
       logger.error(e.message)
       reject(e)
     })
