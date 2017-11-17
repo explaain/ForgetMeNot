@@ -373,8 +373,8 @@ const getUserData = function(organisationID, user) {
     }).then(function(response) {
       logger.info('👤  User Data Received!', response.data)
       track('User data fetched', {
-        env: 'Local',
-        user_id: data.userID
+        organisationID: organisationID,
+        userID: user.uid
       })
       resolve(response.data)
     }).catch(function(error) {
@@ -422,8 +422,8 @@ const addUserToOrganisation = function(organisationID, user, verifiedEmails) {
     }).then(function(response) {
       logger.info('👤  User Joined and User Data Received!', response.data)
       track('User joined', {
-        env: 'Local',
-        user_id: data.userID
+        organisationID: organisationID,
+        userID: user.uid
       })
       resolve(response.data)
     }).catch(function(error) {
@@ -872,11 +872,11 @@ const saveToDb = function(sender, memory, requestData) {
   }).then(function(response) {
     console.log('📪  The response data!', response.data)
     memory.objectID = response.data.objectID
-    track('Card Saved', {
+    track('Card Created', {
+      organisationID: organisationID,
+      userID: user.uid,
       card: memory,
-      assigned_to_team: data.teamID,
-      env: 'Local',
-      user_id: data.userID
+      assignedToTeam: data.teamID
     })
     d.resolve()
   }).catch(function(e) {
@@ -915,10 +915,9 @@ const updateDb = function(sender, memory, requestData) {
   }).then(function(response) {
     console.log('📪  The response data!', response.data);
     track('Card Updated', {
-      card: memory,
-      env: 'Local',
-      user_id: data.userID,
-      assigned_to_team: data.teamID
+      organisationID: organisationID,
+      userID: user.uid,
+      card: memory
     })
     d.resolve()
   }).catch(function(e) {
@@ -939,9 +938,9 @@ const deleteFromDb = function(sender, objectID) {
 		} else {
 			logger.trace('User memory deleted successfully!');
       track('Card Deleted', {
-        card: 'memory',
-        env: 'Local',
-        deleted_by: sender
+        organisationID: organisationID,
+        userID: user.uid,
+        card: memory
       })
 			d.resolve();
 		}
@@ -1132,11 +1131,6 @@ const fetchListItemCards = function(cards) {
         getDbObject(AlgoliaIndex, key)
         .then(function(content) {
           card.listCards[key] = content;
-          track('Fetch Cards', {
-            env: 'Local',
-            fetch_key: key,
-            search_results: Object.keys(card.listCards).length
-          })
           p.resolve(content);
         }).catch(function(e) {
           logger.error(e);
