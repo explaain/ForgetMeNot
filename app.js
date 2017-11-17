@@ -18,6 +18,7 @@ var api = require('./app/routes/api');
 var users = require('./app/routes/users');
 var webhooks = require('./app/routes/webhooks');
 var notifications = require('./app/routes/notifications')
+var analytics = require('./app/routes/analytics')
 
 var app = express();
 
@@ -36,8 +37,9 @@ app.use(cookieParser());
 app.use('/', express.static('./app/views'));
 app.use('/api', api);
 app.use('/users', users);
+app.use('/notify', notifications);
 app.use('/webhook', webhooks);
-app.use('/notify', notifications)
+app.use('/analytics', analytics);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

@@ -173,9 +173,6 @@ const rescheduleAllReminders = function() {
 	});
 }
 
-
-
-
 var clientMessageFunction;
 exports.acceptClientMessageFunction = function(messageFunction) {
 	clientMessageFunction = messageFunction
@@ -257,6 +254,7 @@ exports.getUserData = function(req) {
 	return d.promise
 }
 
+
 exports.getUserTeamDetails = function(req) {
   try {
     logger.trace('getUserData');
@@ -295,6 +293,25 @@ exports.addUserToOrganisation = function(req) {
 		d.reject(e)
 	});
 	return d.promise
+
+exports.fetchMixpanelData = function(data) {
+  const start = data.start,
+        end = data.end,
+        event = data.event,
+        properties = data.properties,
+        limit = data.limit
+  return new Promise((resolve, reject) => {
+    axios.get('https://4911948a523883a90eba70f3a70d578b@mixpanel.com/api/2.0/segmentation?from_date='+start+'&to_date='+end+'&event='+event+(properties && properties.length ? '&on=properties["'+properties.join('","')+'"]' : '') + (limit ? '&limit=' + limit : ''))
+    .then(function(response) {
+      // console.log(response.data);
+      console.log(response.data.data);
+      resolve(response.data.data)
+    })
+    .catch(function(error) {
+      console.log(error);
+      reject(error)
+    })
+  })
 }
 
 const authenticateSender = function(user) {
@@ -354,6 +371,10 @@ const getUserData = function(organisationID, user) {
       data: data
     }).then(function(response) {
       logger.info('👤  User Data Received!', response.data)
+      track('User data fetched', {
+        env: 'Local',
+        user_id: data.userID
+      })
       resolve(response.data)
     }).catch(function(error) {
       logger.error(error)
@@ -800,7 +821,7 @@ const getDbObject = function(index, objectID, returnArray) {
 }
 exports.getDbObject = getDbObject;
 
-const searchDb = function(index, params) {
+const searchDb = function(index, params, userID) {
 	logger.trace()
 	const d = Q.defer();
 	index.search(params, function searchDone(err, content) { /* @TODO: investigate whether function name is needed */
@@ -852,7 +873,9 @@ const saveToDb = function(sender, memory, requestData) {
     memory.objectID = response.data.objectID
     track('Card Saved', {
       card: memory,
-      env: 'Local'
+      assigned_to_team: data.teamID,
+      env: 'Local',
+      user_id: data.userID
     })
     d.resolve()
   }).catch(function(e) {
@@ -890,6 +913,12 @@ const updateDb = function(sender, memory, requestData) {
     data: data
   }).then(function(response) {
     console.log('📪  The response data!', response.data);
+    track('Card Updated', {
+      card: memory,
+      env: 'Local',
+      user_id: data.userID,
+      assigned_to_team: data.teamID
+    })
     d.resolve()
   }).catch(function(e) {
     console.log('📛  Error!', e);
@@ -908,6 +937,11 @@ const deleteFromDb = function(sender, objectID) {
 			d.reject(err);
 		} else {
 			logger.trace('User memory deleted successfully!');
+      track('Card Deleted', {
+        card: 'memory',
+        env: 'Local',
+        deleted_by: sender
+      })
 			d.resolve();
 		}
 	});
@@ -1097,6 +1131,11 @@ const fetchListItemCards = function(cards) {
         getDbObject(AlgoliaIndex, key)
         .then(function(content) {
           card.listCards[key] = content;
+          track('Fetch Cards', {
+            env: 'Local',
+            fetch_key: key,
+            search_results: Object.keys(card.listCards).length
+          })
           p.resolve(content);
         }).catch(function(e) {
           logger.error(e);
@@ -1319,6 +1358,5 @@ const getGeneralIntent = function(intent) {
     return 'other'
   }
 }
-
 
 rescheduleAllReminders();
