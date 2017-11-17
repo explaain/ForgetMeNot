@@ -293,6 +293,7 @@ exports.addUserToOrganisation = function(req) {
 		d.reject(e)
 	});
 	return d.promise
+}
 
 exports.fetchMixpanelData = function(data) {
   const start = data.start,
