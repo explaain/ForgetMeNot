@@ -198,10 +198,10 @@ const sendClientMessage = function(data) {
 }
 
 
-exports.deleteMemories = function(sender, objectID) {
+exports.deleteMemories = function(sender, organisationID, objectID) {
   logger.trace('deleteMemories');
 	const d = Q.defer()
-	deleteFromDb(sender, objectID)
+	deleteFromDb(sender, organisationID, objectID)
 	.then(function(result) {
 		d.resolve(result)
 	}).catch(function(e) {
@@ -859,7 +859,7 @@ const saveToDb = function(sender, memory, requestData) {
 	// });
 
   const data = {
-    organisationID: 'explaain',
+    organisationID: requestData.organisationID,
     objectID: memory.objectID || null,
     content: memory.content,
     userID: requestData.user.uid
@@ -872,11 +872,11 @@ const saveToDb = function(sender, memory, requestData) {
   }).then(function(response) {
     console.log('📪  The response data!', response.data)
     memory.objectID = response.data.objectID
+    data.objectID = memory.objectID
     track('Card Created', {
-      organisationID: organisationID,
-      userID: user.uid,
-      card: memory,
-      assignedToTeam: data.teamID
+      organisationID: data.organisationID,
+      userID: data.userID,
+      card: data
     })
     d.resolve()
   }).catch(function(e) {
@@ -902,7 +902,7 @@ const updateDb = function(sender, memory, requestData) {
 
   console.log(requestData);
   const data = {
-    organisationID: 'explaain',
+    organisationID: requestData.organisationID,
     objectID: memory.objectID || null,
     content: memory.content,
     userID: requestData.user.uid
@@ -915,9 +915,9 @@ const updateDb = function(sender, memory, requestData) {
   }).then(function(response) {
     console.log('📪  The response data!', response.data);
     track('Card Updated', {
-      organisationID: organisationID,
-      userID: user.uid,
-      card: memory
+      organisationID: data.organisationID,
+      userID: data.userID,
+      card: data
     })
     d.resolve()
   }).catch(function(e) {
@@ -926,7 +926,7 @@ const updateDb = function(sender, memory, requestData) {
   })
 	return d.promise;
 }
-const deleteFromDb = function(sender, objectID) {
+const deleteFromDb = function(sender, organisationID, objectID) {
   // IS THIS SECURE? DOES IT DIFFERENTIATE BY SENDER????
 	logger.trace()
 	const d = Q.defer();
@@ -939,8 +939,8 @@ const deleteFromDb = function(sender, objectID) {
 			logger.trace('User memory deleted successfully!');
       track('Card Deleted', {
         organisationID: organisationID,
-        userID: user.uid,
-        card: memory
+        userID: sender,
+        objectID: objectID
       })
 			d.resolve();
 		}

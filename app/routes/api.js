@@ -21,8 +21,9 @@ router.post('/memories', function(req, res) {
 });
 router.delete('/memories', function(req, res) {
 	const sender = req.query.sender;
+	const organisationID = req.query.organisationID;
 	const objectID = req.query.objectID;
-	apiController.deleteMemories(sender, objectID)
+	apiController.deleteMemories(sender, organisationID, objectID)
 	.then(function(result) {
 		res.status(200).send(result);
 	}).catch(function(e) {
