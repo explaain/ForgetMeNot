@@ -277,22 +277,20 @@ exports.getUserTeamDetails = function(req) {
   }
 }
 
-exports.addUserToOrganisation = function(req) {
-  logger.trace('getUserData');
-	const d = Q.defer()
+exports.addUserToOrganisation = (req) => new Promise(function(resolve, reject) {
+  logger.trace('getUserData')
   logger.info(req)
   authenticateSender(req.user)
   // .then(res => { return checkPermissions(req.organisationID, req.user) })
   .then(res => { return addUserToOrganisation(req.organisationID, req.user, req.verifiedEmails) })
-	.then(function(result) {
+  .then(function(result) {
     logger.trace()
     if (!result.statusCode) result.statusCode = 200 //temp
-		d.resolve(result)
-	}).catch(function(e) {
-		logger.error(e);
-		d.reject(e)
-	});
-	return d.promise
+    resolve(result)
+  }).catch(function(e) {
+    logger.error(e)
+    reject(e)
+  })
 }
 
 exports.fetchMixpanelData = function(data) {
@@ -318,25 +316,23 @@ exports.fetchMixpanelData = function(data) {
   })
 }
 
-const authenticateSender = function(user) {
-  return new Promise((resolve, reject) => {
-    FirebaseAdmin.auth().verifyIdToken(user.idToken)
-    .then(function(decodedToken) {
-      var uid = decodedToken.uid;
-      if (user.uid == uid) {
-        logger.info('🔑👤  User Authentication Succcessful!')
-        resolve()
-      } else {
-        const e = { statusCode: 400, message: '❌ 🔑  User UID doesn\'t match accessToken' }
-        logger.error(e.message)
-        reject(e)
-      }
-    }).catch(function(error) {
-      logger.error(error)
-      const e = { statusCode: 400, message: '❌ 🔑  User authentication failed: ' }
+const authenticateSender = (user) => new Promise((resolve, reject) => {
+  FirebaseAdmin.auth().verifyIdToken(user.idToken)
+  .then(function(decodedToken) {
+    var uid = decodedToken.uid;
+    if (user.uid == uid) {
+      logger.info('🔑👤  User Authentication Succcessful!')
+      resolve()
+    } else {
+      const e = { statusCode: 400, message: '❌ 🔑  User UID doesn\'t match accessToken' }
       logger.error(e.message)
       reject(e)
-    })
+    }
+  }).catch(function(error) {
+    logger.error(error)
+    const e = { statusCode: 400, message: '❌ 🔑  User authentication failed: ' + ( error.errorInfo.code === 'auth/argument-error' ? ' The Firebase ID token expired!' ) }
+    logger.error(e.message)
+    reject(e)
   })
 }
 
