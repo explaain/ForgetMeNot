@@ -316,7 +316,7 @@ exports.fetchMixpanelData = function(data) {
   })
 }
 
-const authenticateSender = (user) => new Promise((resolve, reject) => {
+const authenticateSender = user => new Promise((resolve, reject) => {
   FirebaseAdmin.auth().verifyIdToken(user.idToken)
   .then(function(decodedToken) {
     var uid = decodedToken.uid;
@@ -334,7 +334,7 @@ const authenticateSender = (user) => new Promise((resolve, reject) => {
     logger.error(e.message)
     reject(e)
   })
-}
+})
 
 const checkPermissions = function(organisationID, user) {
   return new Promise((resolve, reject) => {
