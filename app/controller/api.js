@@ -282,8 +282,8 @@ exports.addUserToOrganisation = (req) => new Promise(function(resolve, reject) {
   logger.info(req)
   authenticateSender(req.user)
   // .then(res => { return checkPermissions(req.organisationID, req.user) })
-  .then(res => { return addUserToOrganisation(req.organisationID, req.user, req.verifiedEmails) })
-  .then(function(result) {
+  .then(res => addUserToOrganisation(req.organisationID, req.user, req.verifiedEmails))
+  .then(result => {
     logger.trace()
     if (!result.statusCode) result.statusCode = 200 //temp
     resolve(result)
@@ -291,7 +291,7 @@ exports.addUserToOrganisation = (req) => new Promise(function(resolve, reject) {
     logger.error(e)
     reject(e)
   })
-}
+})
 
 exports.fetchMixpanelData = function(data) {
   const start = data.start,
