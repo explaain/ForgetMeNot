@@ -330,7 +330,7 @@ const authenticateSender = (user) => new Promise((resolve, reject) => {
     }
   }).catch(function(error) {
     logger.error(error)
-    const e = { statusCode: 400, message: '❌ 🔑  User authentication failed: ' + ( error.errorInfo.code === 'auth/argument-error' ? ' The Firebase ID token expired!' ) }
+    const e = { statusCode: 400, message: '❌ 🔑  User authentication failed: ' + ( error.errorInfo.code === 'auth/argument-error' ? ' The Firebase ID token expired!' : 'Unknown issue' ) }
     logger.error(e.message)
     reject(e)
   })
