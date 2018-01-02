@@ -14,11 +14,11 @@ const debug = false;
 const logger = debug ? tracer.colorConsole({level: 'log'}) : {trace:()=>{},log:()=>{}};
 // tracer.setLevel('error');
 
-// Dev bootstrap
-initateSlackBot({
-	bot_access_token: process.env.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN,
-	bot_user_id: process.env.SLACK_BOT_USER_ID
-});
+// // Dev bootstrap
+// initateSlackBot({
+// 	bot_access_token: process.env.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN,
+// 	bot_user_id: process.env.SLACK_BOT_USER_ID
+// });
 
 exports.oauth = function(req, res) {
 	// When a user authorizes an app, a code query parameter is passed on the oAuth endpoint. If that code is not there, we respond with an error message
